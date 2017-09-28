@@ -4,12 +4,13 @@ import Html exposing (text, div, program)
 import Html.Attributes exposing (..)
 import Time exposing (Time)
 import AnimationFrame
-import GL exposing (..)
-import Audio.Types exposing (..)
 import WebGL
-import Math.Vector3 exposing (vec3, Vec3)
-import Audio.Music exposing (..)
 import Random exposing (initialSeed, Seed)
+import Audio.Types exposing (..)
+import Audio.Music exposing (..)
+import Audio.Midi exposing (..)
+import Audio.GL exposing (..)
+import Audio.Visual exposing (..)
 
 
 main : Program Never Model Msg
@@ -33,13 +34,9 @@ type alias Model =
     }
 
 
-type alias MIDINote =
-    ( Int, Int, Int )
-
-
 init : ( Model, Cmd Msg )
 init =
-    { notes = []
+    { notes = [ { letter = A, octave = 2 }, { letter = B, octave = 1 } ]
     , time = 3
     , seed = initialSeed 0
     }
@@ -58,106 +55,45 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        MIDIEvent ( datatype, intNote, volume ) ->
+        MIDIEvent midiNote ->
             let
                 ( _, nextSeed ) =
                     Random.step Random.bool model.seed
             in
-                case datatype of
-                    144 ->
-                        -- note on
-                        { model | notes = (intNote |> intToNote) :: model.notes, seed = nextSeed }
-                            ! []
-
-                    128 ->
-                        -- note off
-                        { model | notes = [] }
-                            ! []
-
-                    _ ->
-                        model ! []
+                model
+                    |> updateNote midiNote
+                    |> updateSeed midiNote
+                    |> (\x -> x ! [])
 
         Animate dt ->
             { model | time = model.time + dt } ! []
 
 
-intToNote : Int -> Note
-intToNote intNote =
-    let
-        letters =
-            [ C, C_, D, D_, E, F, F_, G, G_, A, A_, B ]
-    in
-        { letter =
-            letters
-                |> List.drop (intNote % 12)
-                |> List.head
-                |> Maybe.withDefault A
-        , octave = (floor ((intNote |> toFloat) / 12)) - 1
-        }
+updateNote : MIDINote -> Model -> Model
+updateNote midiNote model =
+    case midiToNote midiNote of
+        Just (NoteOn note) ->
+            { model | notes = note :: model.notes }
+
+        Just (NoteOff note) ->
+            { model | notes = model.notes |> List.filter (not << strEq note) }
+
+        Nothing ->
+            model
 
 
-noteToString : Note -> String
-noteToString note =
-    let
-        noteSymbol =
-            case note.letter of
-                A ->
-                    "A"
+updateSeed : MIDINote -> Model -> Model
+updateSeed note model =
+    model
 
-                A_ ->
-                    "A#"
 
-                B ->
-                    "B"
-
-                C ->
-                    "C"
-
-                C_ ->
-                    "C#"
-
-                D ->
-                    "D"
-
-                D_ ->
-                    "D#"
-
-                E ->
-                    "E"
-
-                F ->
-                    "F"
-
-                F_ ->
-                    "F#"
-
-                G ->
-                    "G"
-
-                G_ ->
-                    "G#"
-    in
-        noteSymbol ++ (note.octave |> toString)
+strEq : a -> a -> Bool
+strEq a a_ =
+    (toString a) == (toString a_)
 
 
 
 -- VIEW
-
-
-noteToAttr : Note -> Attributes
-noteToAttr { letter, octave } =
-    let
-        color =
-            letter |> letterToColor
-
-        offset =
-            (letter |> letterToPosition) |> toFloat |> (*) 0.1
-
-        position =
-            vec3 (((octave - 2 |> toFloat) + offset) * 0.25) (((octave - 2 |> toFloat) + offset) * 0.25) 0
-                |> (flip Math.Vector3.add) (vec3 -0.5 -0.5 0)
-    in
-        { position = position, color = color }
 
 
 view : Model -> Html.Html Msg
@@ -174,6 +110,9 @@ view model =
                 |> List.map noteToAttr
                 |> List.map renderCrap
 
+        noteSvg =
+            svgScene (svgScale [])
+
         -- dummyNotes |> List.map noteToVec |> List.map renderCrap
     in
         div []
@@ -186,6 +125,7 @@ view model =
                 ]
                 entities
             , noteList
+            , noteSvg
             ]
 
 

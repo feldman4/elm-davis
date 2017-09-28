@@ -1,6 +1,10 @@
 module Audio.Types exposing (..)
 
 
+type alias MIDINote =
+    ( Int, Int, Int )
+
+
 type alias Note =
     { letter : Letter, octave : Int }
 

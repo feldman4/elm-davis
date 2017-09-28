@@ -3,6 +3,50 @@ module Audio.Music exposing (..)
 import Audio.Types exposing (..)
 
 
+noteToString : Note -> String
+noteToString note =
+    let
+        noteSymbol =
+            case note.letter of
+                A ->
+                    "A"
+
+                A_ ->
+                    "A#"
+
+                B ->
+                    "B"
+
+                C ->
+                    "C"
+
+                C_ ->
+                    "C#"
+
+                D ->
+                    "D"
+
+                D_ ->
+                    "D#"
+
+                E ->
+                    "E"
+
+                F ->
+                    "F"
+
+                F_ ->
+                    "F#"
+
+                G ->
+                    "G"
+
+                G_ ->
+                    "G#"
+    in
+        noteSymbol ++ (note.octave |> toString)
+
+
 letterToPosition : Letter -> Int
 letterToPosition letter =
     case letter of

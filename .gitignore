@@ -1,3 +1,5 @@
 elm-stuff
 save-commands.json
 .DS_Store
+App.js
+*.sh

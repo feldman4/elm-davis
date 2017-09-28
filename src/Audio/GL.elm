@@ -1,4 +1,4 @@
-module GL exposing (..)
+module Audio.GL exposing (..)
 
 import Html exposing (..)
 import WebGL exposing (..)
