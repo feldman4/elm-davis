@@ -5,10 +5,10 @@ import Html.Attributes exposing (..)
 import Time exposing (Time)
 import AnimationFrame
 import GL exposing (..)
-import Types exposing (..)
+import Audio.Types exposing (..)
 import WebGL
 import Math.Vector3 exposing (vec3, Vec3)
-import Music exposing (..)
+import Audio.Music exposing (..)
 import Random exposing (initialSeed, Seed)
 
 

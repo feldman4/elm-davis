@@ -1,15 +1,12 @@
-module Types exposing (..)
-
-import Html exposing (..)
-
-
-main : Html msg
-main =
-    text ""
+module Audio.Types exposing (..)
 
 
 type alias Note =
     { letter : Letter, octave : Int }
+
+
+type alias Chord =
+    List Note
 
 
 type Letter
