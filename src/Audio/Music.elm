@@ -187,11 +187,6 @@ invertRootedChord chordRooted =
         { intervals = intervals, root = root }
 
 
-consRotate : Int -> Cons a -> Cons a
-consRotate n xs =
-    xs |> Cons.toList |> rotate n |> Cons.fromList |> Maybe.withDefault xs
-
-
 getChordQuality : Chord_ a -> Maybe ChordQuality
 getChordQuality chord =
     let

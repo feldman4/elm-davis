@@ -6,9 +6,10 @@ import Time exposing (Time)
 import AnimationFrame
 import WebGL
 import Random exposing (initialSeed, Seed)
-import Audio.Types exposing (..)
-import Audio.Midi exposing (..)
 import Audio.GL exposing (..)
+import Audio.Midi exposing (..)
+import Audio.Music
+import Audio.Types exposing (..)
 import Audio.Utility exposing (..)
 import Audio.Visual exposing (..)
 
@@ -118,7 +119,13 @@ view : Model -> Html.Html Msg
 view { notes, noteHistory, time } =
     let
         noteList =
-            div [] [ notes |> List.map .note |> List.map noteToString |> String.join "," |> text ]
+            notes
+                |> List.map .note
+                |> List.map noteToString
+                |> String.join ","
+                |> (++) "notes: "
+                |> text
+                |> (\x -> div [] [ x ])
 
         dummyNotes =
             [ { letter = A, octave = 2 } ]
@@ -132,7 +139,7 @@ view { notes, noteHistory, time } =
         toNoteEvent note =
             { note = note, start = 30, end = Nothing }
 
-        noteSvg =
+        noteHtml =
             (notes ++ noteHistory)
                 |> List.map (relativeToPresent time)
                 |> svgScale 3
@@ -141,10 +148,8 @@ view { notes, noteHistory, time } =
         chordText =
             notes |> List.map .note |> printPossibleChords
 
-        -- dummyNotes |> List.map noteToVec |> List.map renderCrap
-    in
-        div []
-            [ WebGL.toHtml
+        glTriangles =
+            WebGL.toHtml
                 [ width 400
                   -- window.width
                 , height 300
@@ -152,9 +157,17 @@ view { notes, noteHistory, time } =
                 , style [ ( "display", "block" ) ]
                 ]
                 entities
-            , noteSvg
+
+        scaleHtml =
+            scaleLadder (Audio.Music.HarmonicMinor 0) |> (\x -> svgScene [ x ])
+    in
+        div []
+            [ scaleHtml
+            , Html.br [] []
+            , noteHtml
             , chordText
             , noteList
+            , glTriangles
             ]
 
 

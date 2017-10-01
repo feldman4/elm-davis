@@ -11,7 +11,7 @@ import Maybe.Extra
 import TypedSvg exposing (circle, g, line, rect, svg)
 import TypedSvg.Attributes as SA exposing (fill, noFill, stroke, strokeWidth, transform, viewBox)
 import TypedSvg.Core exposing (Svg)
-import TypedSvg.Types exposing (Scale, percent, px)
+import TypedSvg.Types exposing (percent, px)
 
 
 {-
@@ -27,6 +27,43 @@ import TypedSvg.Types exposing (Scale, percent, px)
     - can also select svg class tags with css
 
 -}
+
+
+scaleLadder : Audio.Music.Scale -> Svg msg
+scaleLadder scale =
+    let
+        barPosition =
+            [ SA.x1 (percent 50), SA.x2 (percent 50), SA.y1 (percent 0), SA.y2 (percent 100) ]
+
+        barStroke =
+            [ stroke black, strokeWidth (percent 1) ]
+
+        bar =
+            line (barPosition ++ barStroke) []
+
+        drawNoteCircleAt y =
+            g [ transform [ tTranslate 0.5 y ] ] [ noteCircle ]
+
+        noteCircles =
+            scale
+                |> notePositions
+                |> List.map drawNoteCircleAt
+                |> (\xs -> g [ transform [ tTranslate 0 0.05, tScale 1 0.9 ] ] xs)
+    in
+        g [] [ bar, noteCircles ]
+
+
+noteCircle : Svg msg
+noteCircle =
+    circle [ SA.x (percent 0), SA.y (percent 0), SA.r (percent 1), stroke gray, strokeWidth (percent 1) ] []
+
+
+notePositions : Audio.Music.Scale -> List Float
+notePositions =
+    scaleToIntervals
+        >> List.map toFloat
+        >> List.scanl (+) 0
+        >> List.map (\x -> x / 12)
 
 
 tScale : Float -> Float -> TypedSvg.Types.Transform
@@ -111,14 +148,6 @@ printPossibleChords noteList =
         |> String.join ", "
         |> replace "" "no chord recognized"
         |> (\x -> div [] [ text x ])
-
-
-replace : a -> a -> a -> a
-replace a b c =
-    if c == a then
-        b
-    else
-        c
 
 
 printChord : Rooted Chord -> Maybe String

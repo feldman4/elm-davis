@@ -1,6 +1,7 @@
 module Audio.Utility exposing (..)
 
 import Audio.Types exposing (..)
+import Cons exposing (Cons)
 
 
 type Cons2 a
@@ -25,6 +26,19 @@ cons2fromList xs =
 rotate : Int -> List a -> List a
 rotate n xs =
     (List.drop n xs) ++ (List.take n xs)
+
+
+consRotate : Int -> Cons a -> Cons a
+consRotate n xs =
+    xs |> Cons.toList |> rotate n |> Cons.fromList |> Maybe.withDefault xs
+
+
+replace : a -> a -> a -> a
+replace a b c =
+    if c == a then
+        b
+    else
+        c
 
 
 letterToPosition : Letter -> Int
