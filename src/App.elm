@@ -7,9 +7,9 @@ import AnimationFrame
 import WebGL
 import Random exposing (initialSeed, Seed)
 import Audio.Types exposing (..)
-import Audio.Music exposing (..)
 import Audio.Midi exposing (..)
 import Audio.GL exposing (..)
+import Audio.Utility exposing (..)
 import Audio.Visual exposing (..)
 
 
@@ -28,17 +28,25 @@ main =
 
 
 type alias Model =
-    { notes : List Note
+    { notes : List NoteEvent
+    , noteHistory : List NoteEvent
     , time : Time
     , seed : Seed
     }
 
 
+dummyNotes : List NoteEvent
+dummyNotes =
+    [ { letter = A, octave = 4 }, { letter = B, octave = 4 } ]
+        |> List.map (\n -> { note = n, start = 0, end = Nothing })
+
+
 init : ( Model, Cmd Msg )
 init =
-    { notes = [ { letter = A, octave = 2 }, { letter = B, octave = 1 } ]
-    , time = 3
+    { notes = []
+    , time = 0
     , seed = initialSeed 0
+    , noteHistory = []
     }
         ! []
 
@@ -66,17 +74,27 @@ update msg model =
                     |> (\x -> x ! [])
 
         Animate dt ->
-            { model | time = model.time + dt } ! []
+            { model | time = model.time + (dt / 1000) } ! []
 
 
 updateNote : MIDINote -> Model -> Model
 updateNote midiNote model =
     case midiToNote midiNote of
         Just (NoteOn note) ->
-            { model | notes = note :: model.notes }
+            { model | notes = { note = note, start = model.time, end = Nothing } :: model.notes }
 
         Just (NoteOff note) ->
-            { model | notes = model.notes |> List.filter (not << strEq note) }
+            let
+                ( thisNote, otherNotes ) =
+                    model.notes |> List.partition (strEq note << .note)
+
+                endedNotes =
+                    thisNote |> List.map (\n -> { n | end = Just model.time })
+            in
+                { model
+                    | notes = otherNotes
+                    , noteHistory = endedNotes ++ model.noteHistory
+                }
 
         Nothing ->
             model
@@ -97,21 +115,31 @@ strEq a a_ =
 
 
 view : Model -> Html.Html Msg
-view model =
+view { notes, noteHistory, time } =
     let
         noteList =
-            div [] [ model.notes |> List.map noteToString |> String.join "," |> text ]
+            div [] [ notes |> List.map .note |> List.map noteToString |> String.join "," |> text ]
 
         dummyNotes =
             [ { letter = A, octave = 2 } ]
 
         entities =
-            model.notes
+            notes
+                |> List.map .note
                 |> List.map noteToAttr
                 |> List.map renderCrap
 
+        toNoteEvent note =
+            { note = note, start = 30, end = Nothing }
+
         noteSvg =
-            svgScene (svgScale [])
+            (notes ++ noteHistory)
+                |> List.map (relativeToPresent time)
+                |> svgScale 3
+                |> svgScene
+
+        chordText =
+            notes |> List.map .note |> printPossibleChords
 
         -- dummyNotes |> List.map noteToVec |> List.map renderCrap
     in
@@ -124,8 +152,9 @@ view model =
                 , style [ ( "display", "block" ) ]
                 ]
                 entities
-            , noteList
             , noteSvg
+            , chordText
+            , noteList
             ]
 
 

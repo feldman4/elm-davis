@@ -1,87 +1,235 @@
 module Audio.Music exposing (..)
 
 import Audio.Types exposing (..)
+import Audio.Utility exposing (..)
+import Cons exposing (Cons, cons)
 
 
-noteToString : Note -> String
-noteToString note =
+{-| represents a scale and a mode within the scale
+-}
+type Scale
+    = NaturalMinor Int
+    | NaturalMajor Int
+    | HarmonicMajor Int
+    | HarmonicMinor Int
+
+
+type Triad
+    = MinorTriad
+    | MajorTriad
+
+
+type ChordQuality
+    = Diminished
+    | Minor
+    | Major
+    | Augmented
+
+
+type alias Chord =
+    Chord_ {}
+
+
+type alias Chord_ a =
+    { a | intervals : Cons Int }
+
+
+type alias Rooted a =
+    { a | root : Note }
+
+
+type alias Tones =
+    { flatSecond : Bool
+    , second : Bool
+    , minorThird : Bool
+    , third : Bool
+    , fourth : Bool
+    , flatFifth : Bool
+    , fifth : Bool
+    , flatSixth : Bool
+    , sixth : Bool
+    , seventh : Bool
+    , majorSeventh : Bool
+    }
+
+
+exampleMinor : Chord
+exampleMinor =
+    { intervals = cons 3 [ 7 ] }
+
+
+exampleRootedMinor : Rooted Chord
+exampleRootedMinor =
+    { intervals = exampleMinor.intervals
+    , root = { letter = A, octave = 3 }
+    }
+
+
+analyzeChord : Chord_ a -> { quality : Maybe ChordQuality }
+analyzeChord chord =
+    { quality = getChordQuality chord }
+
+
+chordToNotes : Rooted Chord -> Cons Note
+chordToNotes { intervals, root } =
+    intervals
+        |> Cons.map (\n -> n + noteToInt root |> intToNote)
+        |> Cons.append (Cons.cons root [])
+
+
+scaleToIntervals : Scale -> List Int
+scaleToIntervals scale =
+    case scale of
+        NaturalMinor mode ->
+            rotate mode [ 2, 1, 2, 2, 1, 2, 2 ]
+
+        NaturalMajor mode ->
+            rotate mode [ 2, 2, 1, 2, 2, 2, 1 ]
+
+        HarmonicMinor mode ->
+            rotate mode [ 2, 1, 2, 2, 1, 3, 1 ]
+
+        HarmonicMajor mode ->
+            rotate mode [ 2, 2, 1, 2, 1, 3, 1 ]
+
+
+classifyTriad : Int -> Maybe Triad
+classifyTriad interval =
+    case interval of
+        3 ->
+            Just MinorTriad
+
+        4 ->
+            Just MajorTriad
+
+        _ ->
+            Nothing
+
+
+chordInScale : Scale -> Maybe ChordQuality
+chordInScale scale =
+    scale
+        |> formChord (cons 2 [ 4 ])
+        |> getChordQuality
+
+
+notesToChord : Cons2 Note -> Rooted Chord
+notesToChord notes =
+    notes
+        |> cons2map noteToInt
+        |> (\(Cons2 root first rest) ->
+                { root = root |> intToNote
+                , intervals = cons (first - root) (rest |> List.map (\x -> x - root))
+                }
+           )
+
+
+formChord : Cons Int -> Scale -> Chord
+formChord positions scale =
     let
-        noteSymbol =
-            case note.letter of
-                A ->
-                    "A"
-
-                A_ ->
-                    "A#"
-
-                B ->
-                    "B"
-
-                C ->
-                    "C"
-
-                C_ ->
-                    "C#"
-
-                D ->
-                    "D"
-
-                D_ ->
-                    "D#"
-
-                E ->
-                    "E"
-
-                F ->
-                    "F"
-
-                F_ ->
-                    "F#"
-
-                G ->
-                    "G"
-
-                G_ ->
-                    "G#"
+        f n =
+            scale |> scaleToIntervals |> List.take n |> List.sum
     in
-        noteSymbol ++ (note.octave |> toString)
+        { intervals = Cons.map f positions }
 
 
-letterToPosition : Letter -> Int
-letterToPosition letter =
-    case letter of
-        C ->
-            0
+getChordTones : Chord_ a -> Tones
+getChordTones { intervals } =
+    let
+        f n =
+            intervals |> Cons.toList |> List.member n
+    in
+        { flatSecond = f 1
+        , second = f 2
+        , minorThird = f 3
+        , third = f 4
+        , fourth = f 5
+        , flatFifth = f 6
+        , fifth = f 7
+        , flatSixth = f 8
+        , sixth = f 9
+        , seventh = f 10
+        , majorSeventh = f 11
+        }
 
-        C_ ->
-            1
 
-        D ->
-            2
+allInversions : Rooted Chord -> List (Rooted Chord)
+allInversions chordRooted =
+    chordRooted.intervals
+        |> Cons.toList
+        |> List.scanl (\a b -> invertRootedChord b) chordRooted
 
-        D_ ->
-            3
 
-        E ->
-            4
+invertChord : Chord_ a -> Chord
+invertChord { intervals } =
+    let
+        ( first, rest ) =
+            Cons.uncons intervals
+    in
+        cons 12 rest
+            |> Cons.map (\x -> x - first)
+            |> consRotate 1
+            |> (\x -> { intervals = x })
 
-        F ->
-            5
 
-        F_ ->
-            6
+invertRootedChord : Rooted Chord -> Rooted Chord
+invertRootedChord chordRooted =
+    let
+        intervals =
+            chordRooted |> invertChord |> .intervals
 
-        G ->
-            7
+        root =
+            chordRooted.root
+                |> noteToInt
+                |> (+) (Cons.head chordRooted.intervals)
+                |> intToNote
+    in
+        { intervals = intervals, root = root }
 
-        G_ ->
-            8
 
-        A ->
-            9
+consRotate : Int -> Cons a -> Cons a
+consRotate n xs =
+    xs |> Cons.toList |> rotate n |> Cons.fromList |> Maybe.withDefault xs
 
-        A_ ->
-            10
 
-        B ->
-            11
+getChordQuality : Chord_ a -> Maybe ChordQuality
+getChordQuality chord =
+    let
+        tones =
+            chord |> getChordTones
+
+        triadTones =
+            [ .minorThird, .third, .flatFifth, .fifth, .flatSixth ]
+                |> List.map (\f -> f tones)
+    in
+        case triadTones of
+            [ True, False, True, False, False ] ->
+                Just Diminished
+
+            [ True, False, False, True, False ] ->
+                Just Minor
+
+            [ False, True, False, True, False ] ->
+                Just Major
+
+            [ False, True, False, False, True ] ->
+                Just Augmented
+
+            _ ->
+                Nothing
+
+
+getTriadQuality : Triad -> Triad -> ChordQuality
+getTriadQuality a b =
+    case ( a, b ) of
+        ( MinorTriad, MinorTriad ) ->
+            Diminished
+
+        ( MinorTriad, MajorTriad ) ->
+            Minor
+
+        ( MajorTriad, MinorTriad ) ->
+            Major
+
+        ( MajorTriad, MajorTriad ) ->
+            Augmented

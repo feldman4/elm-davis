@@ -5,12 +5,21 @@ type alias MIDINote =
     ( Int, Int, Int )
 
 
+type NotePress a
+    = NoteOn a
+    | NoteOff a
+
+
 type alias Note =
     { letter : Letter, octave : Int }
 
 
-type alias Chord =
+type alias ChordQuality =
     List Note
+
+
+type alias NoteEvent =
+    { note : Note, start : Float, end : Maybe Float }
 
 
 type Letter

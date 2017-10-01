@@ -1,18 +1,23 @@
 module Audio.Visual exposing (..)
 
-import Audio.Types exposing (..)
-import Audio.Music exposing (..)
 import Audio.GL exposing (..)
-import Math.Vector3 exposing (vec3, Vec3)
-import TypedSvg exposing (svg, circle, rect, line)
-import TypedSvg.Attributes as SA exposing (viewBox, width, height, rx, ry, cx, cy, r, noFill, fill, strokeWidth, stroke)
-import TypedSvg.Types exposing (px, percent)
+import Audio.Music exposing (..)
+import Audio.Types exposing (..)
+import Audio.Utility exposing (..)
+import Color exposing (Color, black, gray, red, rgba)
+import Html exposing (Html, div, text)
+import Math.Vector3 exposing (Vec3, vec3)
+import Maybe.Extra
+import TypedSvg exposing (circle, g, line, rect, svg)
+import TypedSvg.Attributes as SA exposing (fill, noFill, stroke, strokeWidth, transform, viewBox)
 import TypedSvg.Core exposing (Svg)
-import Html
-import Color exposing (Color, rgba, gray, black)
+import TypedSvg.Types exposing (Scale, percent, px)
 
 
 {-
+
+   svg conventions
+   - viewbox _ _ x y establishes units used by transform(..), pick x = y = 1
 
    draw piano roll
    - one octave, inner lines for note octave
@@ -24,29 +29,34 @@ import Color exposing (Color, rgba, gray, black)
 -}
 
 
-type alias NoteEvent =
-    { note : Note, start : Float, end : Maybe Float }
+tScale : Float -> Float -> TypedSvg.Types.Transform
+tScale =
+    TypedSvg.Types.Scale
 
 
-svgEvent : Float -> Maybe Float -> List a
-svgEvent start end =
-    let
-        position =
-            [ SA.x1 (percent (end |> Maybe.withDefault 0)), SA.x2 (percent start) ]
-    in
-        []
+tTranslate : Float -> Float -> TypedSvg.Types.Transform
+tTranslate =
+    TypedSvg.Types.Translate
 
 
-svgScale : List Note -> List (Svg msg)
-svgScale notes =
+eventPosition : Float -> Maybe Float -> List (TypedSvg.Core.Attribute msg)
+eventPosition start end =
+    [ SA.x1 (percent (end |> Maybe.withDefault 0)), SA.x2 (percent start) ]
+
+
+svgScale : Float -> List NoteEvent -> List (Svg msg)
+svgScale duration noteEvents =
     let
         geometry =
-            [ SA.x (percent 0), SA.y (percent 0), width (percent 100), height (percent 100), rx (px 15), ry (px 15) ]
+            [ SA.x (percent 5), SA.y (percent 5), SA.width (percent 90), SA.height (percent 90), SA.rx (percent 15), SA.ry (percent 15) ]
 
         paint =
             [ stroke gray, noFill, SA.strokeWidth (percent 2) ]
 
-        toLine y =
+        box =
+            rect (geometry ++ paint) []
+
+        toBar y =
             line
                 [ SA.x1 (percent 10)
                 , SA.x2 (percent 90)
@@ -61,19 +71,74 @@ svgScale notes =
             List.range 0 11
                 |> List.map toFloat
                 |> List.map (\x -> (x + 0.5) * (1 / 12))
-                |> List.map toLine
+                |> List.map toBar
+                |> g [ transform [ tTranslate 0.1 0.1, tScale 0.8 0.8 ] ]
+
+        adjustDuration x =
+            100 * (min 1 (x / duration))
+
+        draw noteEvent =
+            let
+                xPosition =
+                    eventPosition (adjustDuration noteEvent.start) (noteEvent.end |> (Maybe.map adjustDuration))
+
+                yPosition =
+                    noteEvent.note.letter
+                        |> letterToPosition
+                        |> (\y -> (toFloat y) / 12 + 0.0)
+                        |> (\y -> [ SA.y1 (percent (100 * y)), SA.y2 (percent (100 * y)) ])
+            in
+                line (xPosition ++ yPosition ++ [ stroke red, strokeWidth (percent 1) ]) []
+
+        notes =
+            noteEvents
+                |> List.filter (\n -> n.end |> Maybe.map ((>) duration) |> Maybe.withDefault True)
+                |> List.map draw
+                |> g [ transform [ tTranslate 0.2 0.1, tScale 0.6 0.8 ] ]
     in
-        [ rect (geometry ++ paint) [] ] ++ bars
+        [ box, bars, notes ]
 
 
-svgScene : List (Svg a) -> Html.Html a
+printPossibleChords : List Note -> Html msg
+printPossibleChords noteList =
+    noteList
+        |> List.sortBy noteToInt
+        |> cons2fromList
+        |> Maybe.map notesToChord
+        |> Maybe.map allInversions
+        |> Maybe.map ((List.map printChord) >> Maybe.Extra.values)
+        |> Maybe.withDefault []
+        |> String.join ", "
+        |> replace "" "no chord recognized"
+        |> (\x -> div [] [ text x ])
+
+
+replace : a -> a -> a -> a
+replace a b c =
+    if c == a then
+        b
+    else
+        c
+
+
+printChord : Rooted Chord -> Maybe String
+printChord chord =
+    let
+        root =
+            chord.root.letter |> letterToString
+
+        quality =
+            chord |> getChordQuality
+
+        print =
+            (\a b -> [ a, toString b ] |> String.join " ")
+    in
+        Maybe.map2 print (Just root) quality
+
+
+svgScene : List (Svg a) -> Html a
 svgScene =
-    svg [ width (px 300), height (px 300), viewBox 0 0 120 120 ]
-
-
-roundRect : List (Svg msg)
-roundRect =
-    [ rect [ SA.x (px 10), SA.y (px 10), width (percent 80), height (px 100), rx (px 15), ry (px 15) ] [] ]
+    svg [ SA.width (px 300), SA.height (px 300), viewBox 0 0 1 1 ]
 
 
 noteToAttr : Note -> Attributes
