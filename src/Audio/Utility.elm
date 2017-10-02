@@ -25,7 +25,11 @@ cons2fromList xs =
 
 rotate : Int -> List a -> List a
 rotate n xs =
-    (List.drop n xs) ++ (List.take n xs)
+    let
+        p =
+            List.length xs
+    in
+        (List.drop (n % p) xs) ++ (List.take (n % p) xs)
 
 
 consRotate : Int -> Cons a -> Cons a
@@ -39,6 +43,25 @@ replace a b c =
         b
     else
         c
+
+
+{-| return cumulative sum and divide by max, ie map a list of spacings
+to points in [0, 1)
+-}
+normalizeIntervals : List Float -> List Float
+normalizeIntervals xs =
+    let
+        n =
+            List.sum xs
+    in
+        xs
+            |> List.scanl (+) 0
+            |> List.map (\x -> x / n)
+
+
+intervalsToPositions : List Int -> List Float
+intervalsToPositions =
+    List.map toFloat >> normalizeIntervals
 
 
 letterToPosition : Letter -> Int

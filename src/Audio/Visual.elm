@@ -85,7 +85,7 @@ svgScale duration noteEvents =
                 yPosition =
                     noteEvent.note.letter
                         |> letterToPosition
-                        |> (\y -> (toFloat y) / 12 + 0.0)
+                        |> (\y -> 1 - (toFloat y) / 12)
                         |> (\y -> [ SA.y1 (percent (100 * y)), SA.y2 (percent (100 * y)) ])
             in
                 line (xPosition ++ yPosition ++ [ stroke red, strokeWidth (percent 1) ]) []

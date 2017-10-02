@@ -7,13 +7,12 @@ import AnimationFrame
 import WebGL
 import Random exposing (initialSeed, Seed)
 import Audio.GL exposing (..)
-import Audio.Ladder exposing (scalesToLadder, ladderToSvg, updateSteps, fillStep, selectNotes)
+import Audio.Ladder exposing (..)
 import Audio.Midi exposing (..)
 import Audio.Music exposing (middleC)
 import Audio.Types exposing (..)
 import Audio.Utility exposing (..)
 import Audio.Visual exposing (..)
-import Color
 
 
 main : Program Never Model Msg
@@ -155,12 +154,18 @@ view { notes, noteHistory, time } =
             noteHistory |> establishRoot |> Maybe.withDefault middleC.letter
 
         colorNotes c =
-            updateSteps (selectNotes root noteList) (fillStep c)
+            updateStepsSimple (selectNotes root noteList) (rgbStep c)
+
+        lightenUnplayedNotes saturation lightness =
+            updateStepsSimple
+                (selectNotes root noteList >> not)
+                ((saturationStep saturation) >> (lightnessStep lightness))
 
         ladderHtml =
             Audio.Music.bigFour
-                |> scalesToLadder
-                |> colorNotes Color.red
+                |> modesToLadder
+                |> mapStep colorByQuality
+                |> lightenUnplayedNotes 0.6 0.8
                 |> ladderToSvg
                 |> (\x -> svgScene [ x ])
     in

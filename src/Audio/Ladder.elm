@@ -1,4 +1,17 @@
-module Audio.Ladder exposing (..)
+module Audio.Ladder
+    exposing
+        ( modesToLadder
+        , ladderToSvg
+        , updateSteps
+        , updateStepsSimple
+        , rgbStep
+        , alphaStep
+        , saturationStep
+        , lightnessStep
+        , selectNotes
+        , mapStep
+        , colorByQuality
+        )
 
 import Audio.Music exposing (..)
 import Audio.Types exposing (..)
@@ -16,12 +29,13 @@ import TypedSvg.Types exposing (percent, px)
 -- BUILD
 
 
-scalesToLadder : List ( String, Scale ) -> Ladder Int msg
-scalesToLadder scales =
+modesToLadder : List Mode -> Ladder Mode Int msg
+modesToLadder scales =
     let
         step ( n, y ) =
             { data = n
-            , attributes = [ stroke (rgba 255 0 0 0.5) ]
+            , attributes = [ stroke (rgba 0 0 0 1) ]
+            , color = rgba 1 1 1 1
             , transform = M4.identity |> M4.translate3 0 (1 - y) 0
             }
 
@@ -29,13 +43,14 @@ scalesToLadder scales =
             { data = steps
             , attributes = []
             , transform = M4.identity
+            , color = rgba 0 0 0 1
             }
 
         double xs =
-            xs ++ xs
+            xs
 
         positions =
-            scaleToIntervals >> double >> notePositions
+            scaleToIntervals >> double >> intervalsToPositions
 
         rootIntervals =
             scaleToIntervals >> double >> (List.scanl (+) 0)
@@ -47,7 +62,7 @@ scalesToLadder scales =
                 |> rail
 
         rails =
-            scales |> List.map (\( a, b ) -> ( a, makeRail b ))
+            scales |> List.map (\b -> ( b, makeRail b ))
     in
         { rails = rails, rungs = Dict.empty }
 
@@ -61,11 +76,12 @@ stepToSvg step =
     circle
         ([ SA.x (percent 0)
          , SA.y (percent 0)
-         , SA.r (percent 2)
+         , SA.r (percent 3)
          , transform [ step.transform |> tMatrix ]
          , stroke black
          , strokeWidth (percent 1)
-         , noFill
+         , fill step.color
+         , opacity (step.color |> Color.toRgb |> .alpha)
          ]
             ++ step.attributes
         )
@@ -99,7 +115,7 @@ railToSvg rail =
         g [] [ bar, noteCircles ]
 
 
-ladderToSvg : Ladder a msg -> Svg msg
+ladderToSvg : Ladder a b msg -> Svg msg
 ladderToSvg ladder =
     let
         n =
@@ -117,17 +133,33 @@ ladderToSvg ladder =
 
 
 
---HELPERS
+-- MODIFY
 
 
-fillStep : Color -> (Step a msg -> Step a msg)
-fillStep color =
-    addAttribute (fill color)
+colorByQuality : Mode -> Int -> Step Int msg -> Step Int msg
+colorByQuality (Mode scale n) k step =
+    let
+        quality =
+            (Mode scale (n + k)) |> chordInScale
 
+        color =
+            case quality of
+                Nothing ->
+                    step.color
 
-addAttribute : a -> { b | attributes : List a } -> { b | attributes : List a }
-addAttribute attr x =
-    { x | attributes = x.attributes ++ [ attr ] }
+                Just Major ->
+                    rgba 250 100 100 1
+
+                Just Minor ->
+                    rgba 100 100 250 1
+
+                Just Diminished ->
+                    rgba 235 175 0 1
+
+                Just Augmented ->
+                    rgba 100 250 100 1
+    in
+        { step | color = color }
 
 
 selectNotes : Letter -> List Note -> Step Int msg -> Bool
@@ -144,48 +176,67 @@ selectNotes root noteList step =
         List.member (step.data % 12) intervals
 
 
-updateSteps : (Step b msg -> Bool) -> (Step b msg -> Step b msg) -> Ladder b msg -> Ladder b msg
+rgbStep : Color -> Step a msg -> Step a msg
+rgbStep color step =
+    color
+        |> Color.toRgb
+        |> (\c -> Color.rgba c.red c.green c.blue (step.color |> Color.toRgb |> .alpha))
+        |> (\c -> { step | color = c })
+
+
+alphaStep : Float -> Step a msg -> Step a msg
+alphaStep alpha step =
+    step.color
+        |> Color.toRgb
+        |> (\c -> Color.rgba c.red c.green c.blue alpha)
+        |> (\c -> { step | color = c })
+
+
+saturationStep : Float -> Step a msg -> Step a msg
+saturationStep saturation step =
+    step.color
+        |> Color.toHsl
+        |> (\c -> Color.hsla c.hue saturation c.lightness c.alpha)
+        |> (\c -> { step | color = c })
+
+
+lightnessStep : Float -> Step a msg -> Step a msg
+lightnessStep lightness step =
+    step.color
+        |> Color.toHsl
+        |> (\c -> Color.hsla c.hue c.saturation lightness c.alpha)
+        |> (\c -> { step | color = c })
+
+
+
+--HELPERS
+
+
+{-| provide select and update functions to create a ladder transformer
+-}
+updateSteps : (a -> Int -> Step b msg -> Bool) -> (a -> Int -> Step b msg -> Step b msg) -> Ladder a b msg -> Ladder a b msg
 updateSteps select update =
     select ?? update |> mapStep
 
 
-(??) : (a -> Bool) -> (a -> a) -> a -> a
-(??) f g x =
-    if f x then
-        g x
+{-| simple select and update functions don't need rail info
+-}
+updateStepsSimple : (Step b msg -> Bool) -> (Step b msg -> Step b msg) -> Ladder a b msg -> Ladder a b msg
+updateStepsSimple select update =
+    (\a b c -> select c) ?? (\a b c -> update c) |> mapStep
+
+
+(??) : (a -> b -> c -> Bool) -> (a -> b -> c -> c) -> a -> b -> c -> c
+(??) f g a b c =
+    if f a b c then
+        g a b c
     else
-        x
+        c
 
 
-dictMapValues : (a -> b) -> Dict comparable a -> Dict comparable b
-dictMapValues f =
-    Dict.map (\_ v -> f v)
-
-
-mapStep : (Step a msg -> Step b msg) -> Ladder a msg -> Ladder b msg
-mapStep f ladder =
-    let
-        mapRail : Rail a msg -> Rail b msg
-        mapRail =
-            mapData (List.map f)
-    in
-        { ladder | rails = ladder.rails |> List.map (\( a, b ) -> ( a, mapRail b )) }
-
-
-
--- notePositions : Audio.Music.Scale -> List Float
-
-
-notePositions : List Int -> List Float
-notePositions xs =
-    let
-        n =
-            List.sum xs |> toFloat
-    in
-        xs
-            |> List.map toFloat
-            |> List.scanl (+) 0
-            |> List.map (\x -> x / n)
+addAttribute : a -> { b | attributes : List a } -> { b | attributes : List a }
+addAttribute attr x =
+    { x | attributes = x.attributes ++ [ attr ] }
 
 
 tMatrix : Mat4 -> TypedSvg.Types.Transform
@@ -210,8 +261,24 @@ fill color =
     SA.fill (TypedSvg.Types.Fill color)
 
 
+opacity : Float -> TypedSvg.Core.Attribute msg
+opacity fraction =
+    SA.opacity (TypedSvg.Types.Opacity fraction)
 
--- MODIFIERS
+
+
+-- MAP/TRANSFORM
+
+
+mapStep : (a -> Int -> Step b msg -> Step c msg) -> Ladder a b msg -> Ladder a c msg
+mapStep f ladder =
+    let
+        mapRail name =
+            mapData (List.indexedMap (f name))
+    in
+        ladder.rails
+            |> List.map (\( name, rail ) -> ( name, mapRail name rail ))
+            |> (\x -> { ladder | rails = x })
 
 
 {-| opportunity for lens
@@ -263,6 +330,7 @@ transformChildren x =
 type alias WrappedSvg data msg =
     { data : data
     , attributes : List (TypedSvg.Core.Attribute msg)
+    , color : Color
     , transform : Mat4
     }
 
@@ -279,7 +347,9 @@ type alias Rung msg =
     WrappedSvg {} msg
 
 
-type alias Ladder data msg =
-    { rails : List ( String, Rail data msg )
-    , rungs : Dict ( ( String, Int ), ( String, Int ) ) (Rung msg)
+{-| awkward to store name in tuple list, awkward to modify Rail to store name
+-}
+type alias Ladder railName data msg =
+    { rails : List ( railName, Rail data msg )
+    , rungs : Dict ( ( railName, Int ), ( railName, Int ) ) (Rung msg)
     }

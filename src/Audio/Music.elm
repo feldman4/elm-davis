@@ -7,11 +7,15 @@ import Cons exposing (Cons, cons)
 
 {-| represents a scale and a mode within the scale
 -}
+type Mode
+    = Mode Scale Int
+
+
 type Scale
-    = NaturalMinor Int
-    | NaturalMajor Int
-    | HarmonicMajor Int
-    | HarmonicMinor Int
+    = NaturalMinor
+    | NaturalMajor
+    | HarmonicMajor
+    | HarmonicMinor
 
 
 type Triad
@@ -70,10 +74,10 @@ exampleRootedMinor =
     }
 
 
-bigFour : List ( String, Scale )
+bigFour : List Mode
 bigFour =
     [ NaturalMajor, NaturalMinor, HarmonicMinor, HarmonicMajor ]
-        |> List.map (\a -> ( toString (a 0), a 0 ))
+        |> List.map (\x -> Mode x 0)
 
 
 analyzeChord : Chord_ a -> { quality : Maybe ChordQuality }
@@ -88,19 +92,19 @@ chordToNotes { intervals, root } =
         |> Cons.append (Cons.cons root [])
 
 
-scaleToIntervals : Scale -> List Int
+scaleToIntervals : Mode -> List Int
 scaleToIntervals scale =
     case scale of
-        NaturalMinor mode ->
+        Mode NaturalMinor mode ->
             rotate mode [ 2, 1, 2, 2, 1, 2, 2 ]
 
-        NaturalMajor mode ->
+        Mode NaturalMajor mode ->
             rotate mode [ 2, 2, 1, 2, 2, 2, 1 ]
 
-        HarmonicMinor mode ->
+        Mode HarmonicMinor mode ->
             rotate mode [ 2, 1, 2, 2, 1, 3, 1 ]
 
-        HarmonicMajor mode ->
+        Mode HarmonicMajor mode ->
             rotate mode [ 2, 2, 1, 2, 1, 3, 1 ]
 
 
@@ -117,7 +121,7 @@ classifyTriad interval =
             Nothing
 
 
-chordInScale : Scale -> Maybe ChordQuality
+chordInScale : Mode -> Maybe ChordQuality
 chordInScale scale =
     scale
         |> formChord (cons 2 [ 4 ])
@@ -135,7 +139,7 @@ notesToChord notes =
            )
 
 
-formChord : Cons Int -> Scale -> Chord
+formChord : Cons Int -> Mode -> Chord
 formChord positions scale =
     let
         f n =
