@@ -53,6 +53,11 @@ type alias Tones =
     }
 
 
+middleC : Note
+middleC =
+    { letter = C, octave = 4 }
+
+
 exampleMinor : Chord
 exampleMinor =
     { intervals = cons 3 [ 7 ] }
@@ -63,6 +68,12 @@ exampleRootedMinor =
     { intervals = exampleMinor.intervals
     , root = { letter = A, octave = 3 }
     }
+
+
+bigFour : List ( String, Scale )
+bigFour =
+    [ NaturalMajor, NaturalMinor, HarmonicMinor, HarmonicMajor ]
+        |> List.map (\a -> ( toString (a 0), a 0 ))
 
 
 analyzeChord : Chord_ a -> { quality : Maybe ChordQuality }

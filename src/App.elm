@@ -7,11 +7,13 @@ import AnimationFrame
 import WebGL
 import Random exposing (initialSeed, Seed)
 import Audio.GL exposing (..)
+import Audio.Ladder exposing (scalesToLadder, ladderToSvg, updateSteps, fillStep, selectNotes)
 import Audio.Midi exposing (..)
-import Audio.Music
+import Audio.Music exposing (middleC)
 import Audio.Types exposing (..)
 import Audio.Utility exposing (..)
 import Audio.Visual exposing (..)
+import Color
 
 
 main : Program Never Model Msg
@@ -34,12 +36,6 @@ type alias Model =
     , time : Time
     , seed : Seed
     }
-
-
-dummyNotes : List NoteEvent
-dummyNotes =
-    [ { letter = A, octave = 4 }, { letter = B, octave = 4 } ]
-        |> List.map (\n -> { note = n, start = 0, end = Nothing })
 
 
 init : ( Model, Cmd Msg )
@@ -121,23 +117,20 @@ view { notes, noteHistory, time } =
         noteList =
             notes
                 |> List.map .note
+
+        noteText =
+            noteList
                 |> List.map noteToString
                 |> String.join ","
                 |> (++) "notes: "
                 |> text
                 |> (\x -> div [] [ x ])
 
-        dummyNotes =
-            [ { letter = A, octave = 2 } ]
-
         entities =
             notes
                 |> List.map .note
                 |> List.map noteToAttr
                 |> List.map renderCrap
-
-        toNoteEvent note =
-            { note = note, start = 30, end = Nothing }
 
         noteHtml =
             (notes ++ noteHistory)
@@ -158,15 +151,25 @@ view { notes, noteHistory, time } =
                 ]
                 entities
 
-        scaleHtml =
-            scaleLadder (Audio.Music.HarmonicMinor 0) |> (\x -> svgScene [ x ])
+        root =
+            noteHistory |> establishRoot |> Maybe.withDefault middleC.letter
+
+        colorNotes c =
+            updateSteps (selectNotes root noteList) (fillStep c)
+
+        ladderHtml =
+            Audio.Music.bigFour
+                |> scalesToLadder
+                |> colorNotes Color.red
+                |> ladderToSvg
+                |> (\x -> svgScene [ x ])
     in
         div []
-            [ scaleHtml
+            [ ladderHtml
             , Html.br [] []
             , noteHtml
             , chordText
-            , noteList
+            , noteText
             , glTriangles
             ]
 

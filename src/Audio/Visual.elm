@@ -29,43 +29,6 @@ import TypedSvg.Types exposing (percent, px)
 -}
 
 
-scaleLadder : Audio.Music.Scale -> Svg msg
-scaleLadder scale =
-    let
-        barPosition =
-            [ SA.x1 (percent 50), SA.x2 (percent 50), SA.y1 (percent 0), SA.y2 (percent 100) ]
-
-        barStroke =
-            [ stroke black, strokeWidth (percent 1) ]
-
-        bar =
-            line (barPosition ++ barStroke) []
-
-        drawNoteCircleAt y =
-            g [ transform [ tTranslate 0.5 y ] ] [ noteCircle ]
-
-        noteCircles =
-            scale
-                |> notePositions
-                |> List.map drawNoteCircleAt
-                |> (\xs -> g [ transform [ tTranslate 0 0.05, tScale 1 0.9 ] ] xs)
-    in
-        g [] [ bar, noteCircles ]
-
-
-noteCircle : Svg msg
-noteCircle =
-    circle [ SA.x (percent 0), SA.y (percent 0), SA.r (percent 1), stroke gray, strokeWidth (percent 1) ] []
-
-
-notePositions : Audio.Music.Scale -> List Float
-notePositions =
-    scaleToIntervals
-        >> List.map toFloat
-        >> List.scanl (+) 0
-        >> List.map (\x -> x / 12)
-
-
 tScale : Float -> Float -> TypedSvg.Types.Transform
 tScale =
     TypedSvg.Types.Scale
@@ -88,7 +51,7 @@ svgScale duration noteEvents =
             [ SA.x (percent 5), SA.y (percent 5), SA.width (percent 90), SA.height (percent 90), SA.rx (percent 15), SA.ry (percent 15) ]
 
         paint =
-            [ stroke gray, noFill, SA.strokeWidth (percent 2) ]
+            [ stroke gray, noFill, SA.strokeWidth (percent 0) ]
 
         box =
             rect (geometry ++ paint) []
