@@ -136,6 +136,7 @@ view { notes, noteHistory, time } =
                 |> List.map (relativeToPresent time)
                 |> svgScale 3
                 |> svgScene
+                |> (\x -> div divAttributes [ x ])
 
         chordText =
             notes |> List.map .note |> printPossibleChords
@@ -161,21 +162,31 @@ view { notes, noteHistory, time } =
                 (selectNotes root noteList >> not)
                 ((saturationStep saturation) >> (lightnessStep lightness))
 
+        intervals =
+            noteList
+                |> List.map noteToInt
+                |> List.map (\x -> (x - (root |> letterToPosition)) % 12)
+
+        divAttributes =
+            [ style [ ( "height", "35%" ), ( "margin", "0 auto" ), ( "display", "block" ) ] ]
+
         ladderHtml =
             Audio.Music.bigFour
                 |> modesToLadder
                 |> mapStep colorByQuality
                 |> lightenUnplayedNotes 0.6 0.8
-                |> ladderToSvg
+                |> updateSteps (\_ _ _ -> True) (haloTriad intervals)
+                |> ladderToSvg stepToSvg
                 |> (\x -> svgScene [ x ])
+                |> (\x -> div divAttributes [ x ])
     in
-        div []
+        div [ style [ ( "text-align", "center" ) ] ]
             [ ladderHtml
             , Html.br [] []
             , noteHtml
             , chordText
-            , noteText
-            , glTriangles
+              -- , noteText
+              -- , glTriangles
             ]
 
 

@@ -31,8 +31,7 @@ midiToNote ( datatype, intNote, velocity ) =
 
 establishRoot : List NoteEvent -> Maybe Letter
 establishRoot noteEventList =
-    -- noteEventList |> List.map .note |> rootPattern
-    Just C
+    noteEventList |> List.map .note |> rootPattern
 
 
 rootPattern : List Note -> Maybe Letter

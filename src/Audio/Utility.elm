@@ -61,7 +61,7 @@ normalizeIntervals xs =
 
 intervalsToPositions : List Int -> List Float
 intervalsToPositions =
-    List.map toFloat >> normalizeIntervals
+    List.map toFloat >> List.map (\x -> x ^ 0.75) >> normalizeIntervals
 
 
 letterToPosition : Letter -> Int
@@ -179,3 +179,46 @@ relativeToPresent time noteEvent =
             | start = fromPresent noteEvent.start
             , end = noteEvent.end |> Maybe.map fromPresent
         }
+
+
+{-| replace String.Extra.replace since String.Extra 1.4.0 is broken
+-}
+stringReplace : String -> String -> String -> String
+stringReplace pattern replacement source =
+    source
+        |> String.split pattern
+        |> List.intersperse replacement
+        |> String.join ""
+
+
+arc : Float -> Float -> Float -> String
+arc start stop radius =
+    let
+        x1 =
+            radius * (cos start)
+
+        y1 =
+            radius * (sin start)
+
+        x2 =
+            radius * (cos stop)
+
+        y2 =
+            radius * (sin stop)
+
+        replace s x =
+            stringReplace s (x |> toString)
+    in
+        """
+        M x1 y1
+        A rx ry x-axis-rotation large-arc-flag sweep-flag x2 y2
+        """
+            |> replace "rx" radius
+            |> replace "ry" radius
+            |> replace "x1" x1
+            |> replace "y1" y1
+            |> replace "x2" x2
+            |> replace "y2" y2
+            |> replace "x-axis-rotation" 0
+            |> replace "large-arc-flag" 0
+            |> replace "sweep-flag" 1

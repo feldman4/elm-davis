@@ -48,7 +48,7 @@ svgScale : Float -> List NoteEvent -> List (Svg msg)
 svgScale duration noteEvents =
     let
         geometry =
-            [ SA.x (percent 5), SA.y (percent 5), SA.width (percent 90), SA.height (percent 90), SA.rx (percent 15), SA.ry (percent 15) ]
+            [ SA.x (percent 0), SA.y (percent 0), SA.width (percent 100), SA.height (percent 100) ]
 
         paint =
             [ stroke gray, noFill, SA.strokeWidth (percent 0) ]
@@ -58,8 +58,8 @@ svgScale duration noteEvents =
 
         toBar y =
             line
-                [ SA.x1 (percent 10)
-                , SA.x2 (percent 90)
+                [ SA.x1 (percent 0)
+                , SA.x2 (percent 100)
                 , SA.y1 (percent (100 * y))
                 , SA.y2 (percent (100 * y))
                 , stroke black
@@ -70,9 +70,9 @@ svgScale duration noteEvents =
         bars =
             List.range 0 11
                 |> List.map toFloat
-                |> List.map (\x -> (x + 0.5) * (1 / 12))
+                |> List.map (\x -> (x / 11))
                 |> List.map toBar
-                |> g [ transform [ tTranslate 0.1 0.1, tScale 0.8 0.8 ] ]
+                |> g [ transform [ tTranslate 0 0.025, tScale 1 0.95 ] ]
 
         adjustDuration x =
             100 * (min 1 (x / duration))
@@ -85,7 +85,7 @@ svgScale duration noteEvents =
                 yPosition =
                     noteEvent.note.letter
                         |> letterToPosition
-                        |> (\y -> 1 - (toFloat y) / 12)
+                        |> (\y -> 1 - ((toFloat y) + 0.5) / 11)
                         |> (\y -> [ SA.y1 (percent (100 * y)), SA.y2 (percent (100 * y)) ])
             in
                 line (xPosition ++ yPosition ++ [ stroke red, strokeWidth (percent 1) ]) []
@@ -94,7 +94,7 @@ svgScale duration noteEvents =
             noteEvents
                 |> List.filter (\n -> n.end |> Maybe.map ((>) duration) |> Maybe.withDefault True)
                 |> List.map draw
-                |> g [ transform [ tTranslate 0.2 0.1, tScale 0.6 0.8 ] ]
+                |> g [ transform [ tTranslate 0.05 0.025, tScale 0.9 0.95 ] ]
     in
         [ box, bars, notes ]
 
@@ -109,7 +109,6 @@ printPossibleChords noteList =
         |> Maybe.map ((List.map printChord) >> Maybe.Extra.values)
         |> Maybe.withDefault []
         |> String.join ", "
-        |> replace "" "no chord recognized"
         |> (\x -> div [] [ text x ])
 
 
@@ -130,7 +129,7 @@ printChord chord =
 
 svgScene : List (Svg a) -> Html a
 svgScene =
-    svg [ SA.width (px 300), SA.height (px 300), viewBox 0 0 1 1 ]
+    svg [ SA.width (percent 100), SA.height (percent 100), viewBox 0 0 1 1 ]
 
 
 noteToAttr : Note -> Attributes

@@ -27,7 +27,7 @@ var shitty_start = function () {
 	navigator.requestMIDIAccess().then(window_asshole);
 
 	var addMIDIPort = function(port) {
-		console.log('added midi port')
+		console.log('added midi port ' + [port.name, port.type])
 		window.lastport = port;
 		port.addEventListener("midimessage", onMIDIMessage);
 	}

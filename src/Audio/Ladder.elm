@@ -2,6 +2,7 @@ module Audio.Ladder
     exposing
         ( modesToLadder
         , ladderToSvg
+        , stepToSvg
         , updateSteps
         , updateStepsSimple
         , rgbStep
@@ -11,16 +12,18 @@ module Audio.Ladder
         , selectNotes
         , mapStep
         , colorByQuality
+        , haloTriad
         )
 
 import Audio.Music exposing (..)
 import Audio.Types exposing (..)
 import Audio.Utility exposing (..)
 import Color exposing (Color, black, blue, gray, red, rgba)
+import Cons exposing (cons)
 import Dict exposing (Dict)
 import List.Extra
 import Math.Matrix4 as M4 exposing (Mat4)
-import TypedSvg exposing (circle, g, line, rect, svg)
+import TypedSvg exposing (circle, g, line, path, rect, svg)
 import TypedSvg.Attributes as SA exposing (noFill, stroke, strokeWidth, transform, viewBox)
 import TypedSvg.Core exposing (Svg)
 import TypedSvg.Types exposing (percent, px)
@@ -29,11 +32,11 @@ import TypedSvg.Types exposing (percent, px)
 -- BUILD
 
 
-modesToLadder : List Mode -> Ladder Mode Int msg
+modesToLadder : List Mode -> Ladder Mode StepData msg
 modesToLadder scales =
     let
         step ( n, y ) =
-            { data = n
+            { data = { interval = n, arcs = [] }
             , attributes = [ stroke (rgba 0 0 0 1) ]
             , color = rgba 1 1 1 1
             , transform = M4.identity |> M4.translate3 0 (1 - y) 0
@@ -68,75 +71,40 @@ modesToLadder scales =
 
 
 
--- DRAW
-
-
-stepToSvg : Step a msg -> Svg msg
-stepToSvg step =
-    circle
-        ([ SA.x (percent 0)
-         , SA.y (percent 0)
-         , SA.r (percent 3)
-         , transform [ step.transform |> tMatrix ]
-         , stroke black
-         , strokeWidth (percent 1)
-         , fill step.color
-         , opacity (step.color |> Color.toRgb |> .alpha)
-         ]
-            ++ step.attributes
-        )
-        []
-
-
-railToSvg : Rail a msg -> Svg msg
-railToSvg rail =
-    let
-        barPosition =
-            [ SA.x1 (percent 0)
-            , SA.x2 (percent 0)
-            , SA.y1 (percent 0)
-            , SA.y2 (percent 100)
-            , transform [ tMatrix rail.transform ]
-            ]
-
-        barStroke =
-            [ stroke black, strokeWidth (percent 1) ]
-
-        bar =
-            line (barPosition ++ barStroke) []
-
-        noteCircles =
-            rail
-                |> transformChildren
-                |> .data
-                |> List.map stepToSvg
-                |> (\xs -> g [] xs)
-    in
-        g [] [ bar, noteCircles ]
-
-
-ladderToSvg : Ladder a b msg -> Svg msg
-ladderToSvg ladder =
-    let
-        n =
-            ladder.rails |> List.length |> toFloat
-
-        adjust i ( name, rail ) =
-            rail
-                |> scale 0.9 0.9
-                |> translate ((i |> toFloat) / n) 0
-                |> railToSvg
-    in
-        ladder.rails
-            |> List.indexedMap adjust
-            |> (\xs -> g [] xs)
-
-
-
 -- MODIFY
 
 
-colorByQuality : Mode -> Int -> Step Int msg -> Step Int msg
+haloTriad : List Int -> Mode -> Int -> Step StepData msg -> Step StepData msg
+haloTriad intervals (Mode mode n) k step =
+    let
+        buildArc i interval =
+            ( interval
+            , { start = (1 / 3) * (toFloat i) + 0.03 + (1 / 12)
+              , stop = (1 / 3) * ((toFloat i) + 1) - 0.03 + (1 / 12)
+              , color = rgba 150 150 150 1
+              }
+            )
+
+        played ( interval, arc ) =
+            List.member (interval % 12) (List.map (\x -> x % 12) intervals)
+
+        data =
+            step.data
+    in
+        Mode mode (n + k)
+            |> formChord (cons 2 [ 4 ])
+            |> .intervals
+            |> Cons.toList
+            |> (::) 0
+            |> List.map ((+) step.data.interval)
+            |> List.indexedMap buildArc
+            |> List.filter played
+            |> List.unzip
+            |> (\( _, arcs ) -> { data | arcs = arcs })
+            |> (\data -> { step | data = data })
+
+
+colorByQuality : Mode -> Int -> Step a msg -> Step a msg
 colorByQuality (Mode scale n) k step =
     let
         quality =
@@ -162,7 +130,7 @@ colorByQuality (Mode scale n) k step =
         { step | color = color }
 
 
-selectNotes : Letter -> List Note -> Step Int msg -> Bool
+selectNotes : Letter -> List Note -> Step StepData msg -> Bool
 selectNotes root noteList step =
     let
         rootInt =
@@ -173,7 +141,7 @@ selectNotes root noteList step =
                 |> List.map noteToInt
                 |> List.map (\x -> (x - rootInt) % 12)
     in
-        List.member (step.data % 12) intervals
+        List.member (step.data.interval % 12) intervals
 
 
 rgbStep : Color -> Step a msg -> Step a msg
@@ -206,6 +174,93 @@ lightnessStep lightness step =
         |> Color.toHsl
         |> (\c -> Color.hsla c.hue c.saturation lightness c.alpha)
         |> (\c -> { step | color = c })
+
+
+
+-- DRAW
+
+
+stepToSvg : Step StepData msg -> Svg msg
+stepToSvg step =
+    let
+        position =
+            [ transform [ step.transform |> tMatrix ] ]
+
+        drawArc { start, stop, color } =
+            path
+                ([ SA.d (arc (start * 2 * pi) (stop * 2 * pi) 0.04)
+                 , noFill
+                 , stroke color
+                 , strokeWidth (percent 0.5)
+                 ]
+                    ++ position
+                )
+                []
+
+        arcs =
+            step.data.arcs |> List.map drawArc
+    in
+        g []
+            ([ circle
+                ([ SA.x (percent 0)
+                 , SA.y (percent 0)
+                 , SA.r (percent 2.5)
+                 , stroke black
+                 , strokeWidth (percent 0.7)
+                 , fill step.color
+                 , opacity (step.color |> Color.toRgb |> .alpha)
+                 ]
+                    ++ position
+                    ++ step.attributes
+                )
+                []
+             ]
+                ++ arcs
+            )
+
+
+railToSvg : (Step a msg -> Svg msg) -> Rail a msg -> Svg msg
+railToSvg drawStep rail =
+    let
+        barPosition =
+            [ SA.x1 (percent 0)
+            , SA.x2 (percent 0)
+            , SA.y1 (percent 0)
+            , SA.y2 (percent 100)
+            , transform [ tMatrix rail.transform ]
+            ]
+
+        barStroke =
+            [ stroke black, strokeWidth (percent 1) ]
+
+        bar =
+            line (barPosition ++ barStroke) []
+
+        noteCircles =
+            rail
+                |> transformChildren
+                |> .data
+                |> List.map drawStep
+                |> (\xs -> g [] xs)
+    in
+        g [] [ bar, noteCircles ]
+
+
+ladderToSvg : (Step b msg -> Svg msg) -> Ladder a b msg -> Svg msg
+ladderToSvg drawStep ladder =
+    let
+        n =
+            ladder.rails |> List.length |> toFloat
+
+        adjust i ( name, rail ) =
+            rail
+                |> scale 0.9 0.9
+                |> translate ((i |> toFloat |> (+) 0.5) / n) 0
+                |> railToSvg drawStep
+    in
+        ladder.rails
+            |> List.indexedMap adjust
+            |> (\xs -> g [] xs)
 
 
 
@@ -345,6 +400,10 @@ type alias Rail data msg =
 
 type alias Rung msg =
     WrappedSvg {} msg
+
+
+type alias StepData =
+    { interval : Int, arcs : List { start : Float, stop : Float, color : Color } }
 
 
 {-| awkward to store name in tuple list, awkward to modify Rail to store name
