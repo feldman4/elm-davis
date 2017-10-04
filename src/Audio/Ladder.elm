@@ -180,25 +180,28 @@ lightnessStep lightness step =
 -- DRAW
 
 
+drawArc : Step a msg -> List (TypedSvg.Core.Attribute msg) -> Arc -> Svg msg
+drawArc step position { start, stop, color } =
+    path
+        ([ SA.d (arc (start * 2 * pi) (stop * 2 * pi) 0.04)
+         , noFill
+         , stroke color
+         , strokeWidth (percent 0.5)
+         , opacity (step.color |> Color.toRgb |> .alpha |> (\x -> x ^ 2))
+         ]
+            ++ position
+        )
+        []
+
+
 stepToSvg : Step StepData msg -> Svg msg
 stepToSvg step =
     let
         position =
             [ transform [ step.transform |> tMatrix ] ]
 
-        drawArc { start, stop, color } =
-            path
-                ([ SA.d (arc (start * 2 * pi) (stop * 2 * pi) 0.04)
-                 , noFill
-                 , stroke color
-                 , strokeWidth (percent 0.5)
-                 ]
-                    ++ position
-                )
-                []
-
         arcs =
-            step.data.arcs |> List.map drawArc
+            step.data.arcs |> List.map (drawArc step position)
     in
         g []
             ([ circle
@@ -402,8 +405,12 @@ type alias Rung msg =
     WrappedSvg {} msg
 
 
+type alias Arc =
+    { start : Float, stop : Float, color : Color }
+
+
 type alias StepData =
-    { interval : Int, arcs : List { start : Float, stop : Float, color : Color } }
+    { interval : Int, arcs : List Arc }
 
 
 {-| awkward to store name in tuple list, awkward to modify Rail to store name
