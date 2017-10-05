@@ -3,6 +3,7 @@ module Audio.Music exposing (..)
 import Audio.Types exposing (..)
 import Audio.Utility exposing (..)
 import Cons exposing (Cons, cons)
+import List.Extra
 
 
 {-| represents a scale and a mode within the scale
@@ -67,11 +68,88 @@ exampleMinor =
     { intervals = cons 3 [ 7 ] }
 
 
+exampleMajor : Chord
+exampleMajor =
+    { intervals = cons 4 [ 7 ] }
+
+
 exampleRootedMinor : Rooted Chord
 exampleRootedMinor =
     { intervals = exampleMinor.intervals
     , root = { letter = A, octave = 3 }
     }
+
+
+exampleRootedMajor : Rooted Chord
+exampleRootedMajor =
+    { intervals = exampleMajor.intervals
+    , root = { letter = A, octave = 3 }
+    }
+
+
+exampleInvertedMajor : Rooted Chord
+exampleInvertedMajor =
+    exampleRootedMajor |> invertRootedChord
+
+
+dMinor : Rooted Chord
+dMinor =
+    { intervals = exampleMinor.intervals, root = { letter = D, octave = 4 } }
+
+
+fMajor2nd : { intervals : Cons number, root : { letter : Letter, octave : number1 } }
+fMajor2nd =
+    { intervals = cons 5 [ 9 ], root = { letter = C, octave = 4 } }
+
+
+rootChord : Note -> Chord -> Rooted Chord
+rootChord note chord =
+    { root = note, intervals = chord.intervals }
+
+
+leadingWithInversions : Rooted Chord -> Rooted Chord -> List (List ( Int, Int ))
+leadingWithInversions first second =
+    let
+        cost ( x, y ) =
+            abs (x - y)
+    in
+        second
+            |> allInversions
+            |> List.concatMap (leading first)
+            |> List.sortBy (List.map cost >> List.sum)
+
+
+{-| Return pairs of intervals.
+
+
+Need to search inversions of second chord.
+
+
+-}
+leading : Rooted Chord -> Rooted Chord -> List (List ( Int, Int ))
+leading first second =
+    let
+        a =
+            first |> chordToIntervals |> Cons.toList
+
+        b =
+            second |> chordToIntervals |> Cons.toList
+
+        k =
+            List.length a
+
+        cost ( x, y ) =
+            abs (x - y)
+    in
+        b
+            |> permutations k
+            |> List.map (List.Extra.zip a)
+            |> List.sortBy (List.map cost >> List.sum)
+
+
+
+-- |> List.head
+-- |> Maybe.withDefault []
 
 
 bigFour : List Mode
@@ -85,11 +163,11 @@ analyzeChord chord =
     { quality = getChordQuality chord }
 
 
-chordToNotes : Rooted Chord -> Cons Note
-chordToNotes { intervals, root } =
+chordToIntervals : Rooted Chord -> Cons Int
+chordToIntervals { intervals, root } =
     intervals
-        |> Cons.map (\n -> n + noteToInt root |> intToNote)
-        |> Cons.append (Cons.cons root [])
+        |> Cons.map (\n -> n + noteToInt root)
+        |> Cons.append (Cons.cons (root |> noteToInt) [])
 
 
 scaleToIntervals : Mode -> List Int
@@ -185,6 +263,18 @@ invertChord { intervals } =
             |> Cons.map (\x -> x - first)
             |> consRotate 1
             |> (\x -> { intervals = x })
+
+
+limitBiOctave : Note -> Note -> Note
+limitBiOctave center note =
+    let
+        c =
+            noteToInt center
+
+        n =
+            noteToInt note
+    in
+        (c + 12) + (n - (c - 12)) % 24 |> intToNote
 
 
 invertRootedChord : Rooted Chord -> Rooted Chord

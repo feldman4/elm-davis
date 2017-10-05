@@ -168,14 +168,16 @@ view { notes, noteHistory, time } =
                 |> List.map (\x -> (x - (root |> letterToPosition)) % 12)
 
         divAttributes =
-            [ style [ ( "height", "35%" ), ( "margin", "0 auto" ), ( "display", "block" ) ] ]
+            [ style [ ( "height", "48%" ), ( "margin", "0 auto" ), ( "display", "block" ) ] ]
 
         ladderHtml =
             Audio.Music.bigFour
                 |> modesToLadder
                 |> mapStep colorByQuality
-                |> lightenUnplayedNotes 0.6 0.8
-                |> updateSteps (\_ _ _ -> True) (haloTriad intervals)
+                |> lightenUnplayedNotes 0.6 0.3
+                -- |> updateSteps (\_ _ _ -> True) (haloTriad intervals)
+                |>
+                    updateSteps (\_ _ _ -> True) (haloLeading noteList)
                 |> ladderToSvg stepToSvg
                 |> (\x -> svgScene [ x ])
                 |> (\x -> div divAttributes [ x ])

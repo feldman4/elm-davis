@@ -2,6 +2,40 @@ module Audio.Utility exposing (..)
 
 import Audio.Types exposing (..)
 import Cons exposing (Cons)
+import List.Extra
+
+
+{-| order matters
+-}
+permutations : Int -> List a -> List (List a)
+permutations k xs =
+    let
+        iter ( a, bs ) =
+            choose (k - 1) bs |> List.map ((::) a)
+    in
+        case k of
+            1 ->
+                xs |> List.map (\x -> [ x ])
+
+            _ ->
+                List.Extra.select xs |> List.concatMap iter
+
+
+{-| order doesn't matter.
+-}
+choose : Int -> List a -> List (List a)
+choose k xs =
+    let
+        iter ( _, a, bs ) =
+            choose (k - 1) bs |> List.map ((::) a)
+    in
+        case k of
+            1 ->
+                xs |> List.map (\x -> [ x ])
+
+            _ ->
+                List.Extra.selectSplit xs
+                    |> List.concatMap iter
 
 
 type Cons2 a
@@ -191,8 +225,10 @@ stringReplace pattern replacement source =
         |> String.join ""
 
 
-arc : Float -> Float -> Float -> String
-arc start stop radius =
+{-| start and stop in radians, radius in user units
+-}
+arcCommand : Float -> Float -> Float -> String
+arcCommand start stop radius =
     let
         x1 =
             radius * (cos start)

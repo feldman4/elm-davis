@@ -13,6 +13,7 @@ module Audio.Ladder
         , mapStep
         , colorByQuality
         , haloTriad
+        , haloLeading
         )
 
 import Audio.Music exposing (..)
@@ -74,6 +75,26 @@ modesToLadder scales =
 -- MODIFY
 
 
+createArcs : Int -> List Arc
+createArcs n_ =
+    let
+        n =
+            toFloat n_
+    in
+        List.range 0 (n_ - 1)
+            |> List.map
+                (\i ->
+                    { start = (1 / n) * (toFloat i + 0.09) + (1 / 12)
+                    , stop = (1 / n) * ((toFloat i) + 0.9) + (1 / 12)
+                    , color = rgba 150 150 150 1
+                    , voice = 0
+                    }
+                )
+
+
+{-| Create arcs for 1-3-5 within the provided mode, if they are in the list of
+intervals.
+-}
 haloTriad : List Int -> Mode -> Int -> Step StepData msg -> Step StepData msg
 haloTriad intervals (Mode mode n) k step =
     let
@@ -82,10 +103,11 @@ haloTriad intervals (Mode mode n) k step =
             , { start = (1 / 3) * (toFloat i) + 0.03 + (1 / 12)
               , stop = (1 / 3) * ((toFloat i) + 1) - 0.03 + (1 / 12)
               , color = rgba 150 150 150 1
+              , voice = 0
               }
             )
 
-        played ( interval, arc ) =
+        played ( arc, interval ) =
             List.member (interval % 12) (List.map (\x -> x % 12) intervals)
 
         data =
@@ -97,11 +119,81 @@ haloTriad intervals (Mode mode n) k step =
             |> Cons.toList
             |> (::) 0
             |> List.map ((+) step.data.interval)
-            |> List.indexedMap buildArc
+            |> List.Extra.zip (createArcs 3)
             |> List.filter played
             |> List.unzip
-            |> (\( _, arcs ) -> { data | arcs = arcs })
+            |> (\( arcs, _ ) -> { data | arcs = arcs })
             |> (\data -> { step | data = data })
+
+
+{-| Create arcs indicating voice leading into the 1-3-5 at this step.
+
+Position the arcs according to the currently played 1-3-5.
+
+Indicate the amount of voice leading using left- or right-aligned dots. Cap at
+4?
+
+Hide for the detected root? What to show if a triad is not being played?
+
+1. show voices in order lowest to highest
+- need to pick 3, could remove octave doublings and go with lowest
+  - screws up common voicings like Maj7 rooted on A (1-5-7-3)
+  - just support 4, covers most guitar voicings. show nothing for the unused
+  voice (can extend later for 7th chords)
+
+2. show voices in order of role in current chord (i.e., remove inversion)
+
+Steps:
+1. for each of 1-3-5 at this step, is it in played notes? if so, remove both
+and set the voice leading to zero
+2. for remaining 1-3-5 x played notes, do linear assignment with cost proportional
+to size of voice leading. brute force scales as (n choose k) where n = played notes
+and k = remaining 1-3-5
+
+(5 3) = 5! / (2! * 3!) = 10
+not too bad
+
+(9 3) = 9 *  8 * 7 / 6 = 3 * 4 * 7 = 84
+worst case, could cache if needed
+
+-}
+haloLeading : List Int -> Mode -> Int -> Step StepData msg -> Step StepData msg
+haloLeading intervals (Mode mode n) k step =
+    let
+        currentChord =
+            intervals
+                |> List.sort
+                |> List.take 3
+                |> List.map intToNote
+                |> cons2fromList
+                |> Maybe.map notesToChord
+
+        closestLeading =
+            Mode mode (n + k)
+                |> formChord (cons 2 [ 4 ])
+                |> rootChord (intToNote step.data.interval)
+                |> f currentChord
+                |> Maybe.andThen List.head
+
+        f a b =
+            case a of
+                Just a_ ->
+                    Just (leadingWithInversions a_ b)
+
+                Nothing ->
+                    Nothing
+    in
+        case closestLeading of
+            Just ([ ( a1, b1 ), ( a2, b2 ), ( a3, b3 ) ] as xs) ->
+                createArcs 3
+                    |> List.Extra.zip xs
+                    |> List.map (\( ( a, b ), arc ) -> { arc | voice = (b - a) })
+                    |> (\arcs ->
+                            mapData (\d -> { d | arcs = arcs }) step
+                       )
+
+            _ ->
+                step
 
 
 colorByQuality : Mode -> Int -> Step a msg -> Step a msg
@@ -170,50 +262,108 @@ saturationStep saturation step =
 
 lightnessStep : Float -> Step a msg -> Step a msg
 lightnessStep lightness step =
-    step.color
-        |> Color.toHsl
-        |> (\c -> Color.hsla c.hue c.saturation lightness c.alpha)
-        |> (\c -> { step | color = c })
+    let
+        compress a b =
+            1 - (1 - a) * b
+    in
+        step.color
+            |> Color.toHsl
+            |> (\c -> Color.hsla c.hue c.saturation (compress c.lightness lightness) c.alpha)
+            |> (\c -> { step | color = c })
 
 
 
 -- DRAW
 
 
+dotAngles : Int -> Arc -> List Float
+dotAngles maxVoice arc =
+    let
+        voices =
+            arc.voice
+                |> abs
+                |> clamp 0 maxVoice
+                |> List.range 1
+                |> List.map position
+
+        position x =
+            (arc.stop - arc.start) / (1 + toFloat maxVoice) * (0.5 + toFloat x)
+    in
+        if arc.voice > 0 then
+            voices |> List.map (\x -> arc.start + x)
+        else
+            voices |> List.map (\x -> arc.stop - x)
+
+
+{-| radius in user units
+-}
+drawDots : Float -> Int -> Arc -> List (Svg msg)
+drawDots radius maxVoice arc =
+    let
+        dotRadius =
+            (arc.stop - arc.start)
+                / (1 + toFloat maxVoice)
+                |> (*) (0.8 * radius)
+
+        dot angle =
+            circle
+                [ SA.r (percent (100 * dotRadius))
+                , strokeWidth (percent (100 * dotRadius))
+                  -- , strokeWidth (percent 100)
+                , stroke black
+                , SA.cx (percent (100 * radius * cos angle))
+                , SA.cy (percent (100 * radius * sin angle))
+                ]
+                []
+    in
+        dotAngles maxVoice arc
+            |> List.map ((*) (2 * pi))
+            |> List.map dot
+
+
 drawArc : Step a msg -> List (TypedSvg.Core.Attribute msg) -> Arc -> Svg msg
-drawArc step position { start, stop, color } =
-    path
-        ([ SA.d (arc (start * 2 * pi) (stop * 2 * pi) 0.04)
-         , noFill
-         , stroke color
-         , strokeWidth (percent 0.5)
-         , opacity (step.color |> Color.toRgb |> .alpha |> (\x -> x ^ 2))
-         ]
-            ++ position
-        )
-        []
+drawArc step position arc =
+    let
+        radius =
+            1.6
+
+        width =
+            percent 20
+
+        dotSvg =
+            drawDots (radius) 3 arc
+
+        arcSvg =
+            path
+                ([ SA.d (arcCommand (arc.start * 2 * pi) (arc.stop * 2 * pi) radius)
+                 , noFill
+                 , stroke arc.color
+                 , strokeWidth width
+                 , opacity (step.color |> Color.toRgb |> .alpha |> (\x -> x ^ 2))
+                 ]
+                )
+                []
+    in
+        g [] (arcSvg :: dotSvg)
 
 
 stepToSvg : Step StepData msg -> Svg msg
 stepToSvg step =
     let
         position =
-            [ transform [ step.transform |> tMatrix ] ]
+            [ transform [ step.transform |> M4.scale3 0.025 0.025 1 |> tMatrix ] ]
 
         arcs =
             step.data.arcs |> List.map (drawArc step position)
     in
-        g []
+        g position
             ([ circle
-                ([ SA.x (percent 0)
-                 , SA.y (percent 0)
-                 , SA.r (percent 2.5)
+                ([ SA.r (percent 100)
                  , stroke black
-                 , strokeWidth (percent 0.7)
+                 , strokeWidth (percent 28)
                  , fill step.color
                  , opacity (step.color |> Color.toRgb |> .alpha)
                  ]
-                    ++ position
                     ++ step.attributes
                 )
                 []
@@ -406,7 +556,7 @@ type alias Rung msg =
 
 
 type alias Arc =
-    { start : Float, stop : Float, color : Color }
+    { start : Float, stop : Float, color : Color, voice : Int }
 
 
 type alias StepData =

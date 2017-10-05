@@ -6,6 +6,7 @@ import Audio.Types exposing (..)
 import Audio.Utility exposing (..)
 import Color exposing (Color, black, gray, red, rgba)
 import Html exposing (Html, div, text)
+import List.Extra
 import Math.Vector3 exposing (Vec3, vec3)
 import Maybe.Extra
 import TypedSvg exposing (circle, g, line, rect, svg)
@@ -108,6 +109,7 @@ printPossibleChords noteList =
         |> Maybe.map allInversions
         |> Maybe.map ((List.map printChord) >> Maybe.Extra.values)
         |> Maybe.withDefault []
+        |> List.Extra.unique
         |> String.join ", "
         |> (\x -> div [] [ text x ])
 
