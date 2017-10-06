@@ -138,7 +138,7 @@ letterToPosition letter =
             11
 
 
-noteToString : Note -> String
+noteToString : FullNote -> String
 noteToString note =
     (note.letter |> letterToString) ++ (note.octave |> toString)
 
@@ -183,7 +183,7 @@ letterToString letter =
             "G#"
 
 
-intToNote : Int -> Note
+intToNote : Int -> FullNote
 intToNote intNote =
     let
         letters =
@@ -198,7 +198,7 @@ intToNote intNote =
         }
 
 
-noteToInt : Note -> Int
+noteToInt : FullNote -> Int
 noteToInt note =
     note.letter |> letterToPosition |> (+) ((note.octave + 1) * 12)
 
@@ -223,6 +223,11 @@ stringReplace pattern replacement source =
         |> String.split pattern
         |> List.intersperse replacement
         |> String.join ""
+
+
+circleClamp : Int -> Int -> Int -> Int
+circleClamp low high x =
+    (x - low) % (high - low) + low
 
 
 {-| start and stop in radians, radius in user units

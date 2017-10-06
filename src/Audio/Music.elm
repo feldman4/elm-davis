@@ -58,7 +58,7 @@ type alias Tones =
     }
 
 
-middleC : Note
+middleC : FullNote
 middleC =
     { letter = C, octave = 4 }
 
@@ -76,14 +76,14 @@ exampleMajor =
 exampleRootedMinor : Rooted Chord
 exampleRootedMinor =
     { intervals = exampleMinor.intervals
-    , root = { letter = A, octave = 3 }
+    , root = { letter = A, octave = 3 } |> noteToInt
     }
 
 
 exampleRootedMajor : Rooted Chord
 exampleRootedMajor =
     { intervals = exampleMajor.intervals
-    , root = { letter = A, octave = 3 }
+    , root = { letter = A, octave = 3 } |> noteToInt
     }
 
 
@@ -92,14 +92,41 @@ exampleInvertedMajor =
     exampleRootedMajor |> invertRootedChord
 
 
-dMinor : Rooted Chord
-dMinor =
-    { intervals = exampleMinor.intervals, root = { letter = D, octave = 4 } }
+
+--
+
+
+aMinor : Rooted Chord
+aMinor =
+    { intervals = exampleMinor.intervals
+    , root = { letter = A, octave = 3 } |> noteToInt
+    }
+
+
+
+-- |> invertRootedChord
+-- |> invertRootedChord
+
+
+cMajor : Rooted Chord
+cMajor =
+    { intervals = exampleMajor.intervals
+    , root = { letter = C, octave = 4 } |> noteToInt
+    }
 
 
 fMajor2nd : { intervals : Cons number, root : { letter : Letter, octave : number1 } }
 fMajor2nd =
     { intervals = cons 5 [ 9 ], root = { letter = C, octave = 4 } }
+
+
+majorScale : Mode
+majorScale =
+    Mode NaturalMajor 0
+
+
+
+--
 
 
 rootChord : Note -> Chord -> Rooted Chord
@@ -112,9 +139,11 @@ leadingWithInversions first second =
     let
         cost ( x, y ) =
             abs (x - y)
+
+        lower =
+            { second | root = first.root |> (\x -> x - 12) }
     in
-        second
-            |> allInversions
+        (allInversions second ++ allInversions lower)
             |> List.concatMap (leading first)
             |> List.sortBy (List.map cost >> List.sum)
 
@@ -130,10 +159,10 @@ leading : Rooted Chord -> Rooted Chord -> List (List ( Int, Int ))
 leading first second =
     let
         a =
-            first |> chordToIntervals |> Cons.toList
+            first |> chordToNotes |> Cons.toList
 
         b =
-            second |> chordToIntervals |> Cons.toList
+            second |> chordToNotes |> Cons.toList
 
         k =
             List.length a
@@ -154,7 +183,8 @@ leading first second =
 
 bigFour : List Mode
 bigFour =
-    [ NaturalMajor, NaturalMinor, HarmonicMinor, HarmonicMajor ]
+    -- [ NaturalMajor, NaturalMinor, HarmonicMinor, HarmonicMajor ]
+    [ NaturalMajor ]
         |> List.map (\x -> Mode x 0)
 
 
@@ -163,15 +193,15 @@ analyzeChord chord =
     { quality = getChordQuality chord }
 
 
-chordToIntervals : Rooted Chord -> Cons Int
-chordToIntervals { intervals, root } =
+chordToNotes : Rooted Chord -> Cons Int
+chordToNotes { intervals, root } =
     intervals
-        |> Cons.map (\n -> n + noteToInt root)
-        |> Cons.append (Cons.cons (root |> noteToInt) [])
+        |> Cons.map (\n -> n + root)
+        |> Cons.append (Cons.cons (root) [])
 
 
-scaleToIntervals : Mode -> List Int
-scaleToIntervals scale =
+modeToIntervals : Mode -> List Int
+modeToIntervals scale =
     case scale of
         Mode NaturalMinor mode ->
             rotate mode [ 2, 1, 2, 2, 1, 2, 2 ]
@@ -202,26 +232,25 @@ classifyTriad interval =
 chordInScale : Mode -> Maybe ChordQuality
 chordInScale scale =
     scale
-        |> formChord (cons 2 [ 4 ])
+        |> modeToChord (cons 2 [ 4 ])
         |> getChordQuality
 
 
 notesToChord : Cons2 Note -> Rooted Chord
 notesToChord notes =
     notes
-        |> cons2map noteToInt
         |> (\(Cons2 root first rest) ->
-                { root = root |> intToNote
+                { root = root
                 , intervals = cons (first - root) (rest |> List.map (\x -> x - root))
                 }
            )
 
 
-formChord : Cons Int -> Mode -> Chord
-formChord positions scale =
+modeToChord : Cons Int -> Mode -> Chord
+modeToChord positions scale =
     let
         f n =
-            scale |> scaleToIntervals |> List.take n |> List.sum
+            scale |> modeToIntervals |> List.take n |> List.sum
     in
         { intervals = Cons.map f positions }
 
@@ -265,18 +294,6 @@ invertChord { intervals } =
             |> (\x -> { intervals = x })
 
 
-limitBiOctave : Note -> Note -> Note
-limitBiOctave center note =
-    let
-        c =
-            noteToInt center
-
-        n =
-            noteToInt note
-    in
-        (c + 12) + (n - (c - 12)) % 24 |> intToNote
-
-
 invertRootedChord : Rooted Chord -> Rooted Chord
 invertRootedChord chordRooted =
     let
@@ -285,9 +302,7 @@ invertRootedChord chordRooted =
 
         root =
             chordRooted.root
-                |> noteToInt
                 |> (+) (Cons.head chordRooted.intervals)
-                |> intToNote
     in
         { intervals = intervals, root = root }
 

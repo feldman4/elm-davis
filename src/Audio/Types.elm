@@ -11,6 +11,10 @@ type NotePress a
 
 
 type alias Note =
+    Int
+
+
+type alias FullNote =
     { letter : Letter, octave : Int }
 
 

@@ -1,11 +1,6 @@
 port module App exposing (Model, Msg(..), init, update, view)
 
-import Html exposing (text, div, program)
-import Html.Attributes exposing (..)
-import Time exposing (Time)
 import AnimationFrame
-import WebGL
-import Random exposing (initialSeed, Seed)
 import Audio.GL exposing (..)
 import Audio.Ladder exposing (..)
 import Audio.Midi exposing (..)
@@ -13,6 +8,12 @@ import Audio.Music exposing (middleC)
 import Audio.Types exposing (..)
 import Audio.Utility exposing (..)
 import Audio.Visual exposing (..)
+import Cons exposing (cons)
+import Html exposing (div, program, text)
+import Html.Attributes exposing (..)
+import Random exposing (Seed, initialSeed)
+import Time exposing (Time)
+import WebGL
 
 
 main : Program Never Model Msg
@@ -119,7 +120,7 @@ view { notes, noteHistory, time } =
 
         noteText =
             noteList
-                |> List.map noteToString
+                |> List.map (intToNote >> noteToString)
                 |> String.join ","
                 |> (++) "notes: "
                 |> text
@@ -152,7 +153,7 @@ view { notes, noteHistory, time } =
                 entities
 
         root =
-            noteHistory |> establishRoot |> Maybe.withDefault middleC.letter
+            noteHistory |> establishRoot |> Maybe.withDefault (middleC |> noteToInt)
 
         colorNotes c =
             updateStepsSimple (selectNotes root noteList) (rgbStep c)
@@ -164,11 +165,18 @@ view { notes, noteHistory, time } =
 
         intervals =
             noteList
-                |> List.map noteToInt
-                |> List.map (\x -> (x - (root |> letterToPosition)) % 12)
+                |> List.map (\x -> (x - root) % 12)
 
         divAttributes =
-            [ style [ ( "height", "48%" ), ( "margin", "0 auto" ), ( "display", "block" ) ] ]
+            [ style [ ( "height", "45%" ), ( "margin", "0 auto" ), ( "display", "block" ) ] ]
+
+        halo =
+            case noteList |> Cons.fromList of
+                Just xs ->
+                    (haloLeading root xs)
+
+                Nothing ->
+                    (\_ _ a -> a)
 
         ladderHtml =
             Audio.Music.bigFour
@@ -177,7 +185,7 @@ view { notes, noteHistory, time } =
                 |> lightenUnplayedNotes 0.6 0.3
                 -- |> updateSteps (\_ _ _ -> True) (haloTriad intervals)
                 |>
-                    updateSteps (\_ _ _ -> True) (haloLeading noteList)
+                    updateSteps (\_ _ _ -> True) halo
                 |> ladderToSvg stepToSvg
                 |> (\x -> svgScene [ x ])
                 |> (\x -> div divAttributes [ x ])
@@ -187,7 +195,7 @@ view { notes, noteHistory, time } =
             , Html.br [] []
             , noteHtml
             , chordText
-              -- , noteText
+            , noteText
               -- , glTriangles
             ]
 

@@ -69,9 +69,9 @@ svgScale duration noteEvents =
                 []
 
         bars =
-            List.range 0 11
+            List.range 0 12
                 |> List.map toFloat
-                |> List.map (\x -> (x / 11))
+                |> List.map (\x -> (x / 12))
                 |> List.map toBar
                 |> g [ transform [ tTranslate 0 0.025, tScale 1 0.95 ] ]
 
@@ -84,9 +84,11 @@ svgScale duration noteEvents =
                     eventPosition (adjustDuration noteEvent.start) (noteEvent.end |> (Maybe.map adjustDuration))
 
                 yPosition =
-                    noteEvent.note.letter
+                    noteEvent.note
+                        |> intToNote
+                        |> .letter
                         |> letterToPosition
-                        |> (\y -> 1 - ((toFloat y) + 0.5) / 11)
+                        |> (\y -> 1 - (toFloat y + 0.5) / 12)
                         |> (\y -> [ SA.y1 (percent (100 * y)), SA.y2 (percent (100 * y)) ])
             in
                 line (xPosition ++ yPosition ++ [ stroke red, strokeWidth (percent 1) ]) []
@@ -97,13 +99,13 @@ svgScale duration noteEvents =
                 |> List.map draw
                 |> g [ transform [ tTranslate 0.05 0.025, tScale 0.9 0.95 ] ]
     in
-        [ box, bars, notes ]
+        [ g [ transform [ tTranslate 0 0 ] ] [ box, bars, notes ] ]
 
 
 printPossibleChords : List Note -> Html msg
 printPossibleChords noteList =
     noteList
-        |> List.sortBy noteToInt
+        |> List.sort
         |> cons2fromList
         |> Maybe.map notesToChord
         |> Maybe.map allInversions
@@ -118,7 +120,7 @@ printChord : Rooted Chord -> Maybe String
 printChord chord =
     let
         root =
-            chord.root.letter |> letterToString
+            chord.root |> intToNote |> .letter |> letterToString
 
         quality =
             chord |> getChordQuality
@@ -135,8 +137,11 @@ svgScene =
 
 
 noteToAttr : Note -> Attributes
-noteToAttr { letter, octave } =
+noteToAttr note =
     let
+        { letter, octave } =
+            note |> intToNote
+
         color =
             letter |> letterToColor
 

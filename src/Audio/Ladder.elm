@@ -16,11 +16,12 @@ module Audio.Ladder
         , haloLeading
         )
 
+import Audio.Leading exposing (..)
 import Audio.Music exposing (..)
 import Audio.Types exposing (..)
 import Audio.Utility exposing (..)
 import Color exposing (Color, black, blue, gray, red, rgba)
-import Cons exposing (cons)
+import Cons exposing (Cons, cons)
 import Dict exposing (Dict)
 import List.Extra
 import Math.Matrix4 as M4 exposing (Mat4)
@@ -54,10 +55,10 @@ modesToLadder scales =
             xs
 
         positions =
-            scaleToIntervals >> double >> intervalsToPositions
+            modeToIntervals >> double >> intervalsToPositions
 
         rootIntervals =
-            scaleToIntervals >> double >> (List.scanl (+) 0)
+            modeToIntervals >> double >> (List.scanl (+) 0)
 
         makeRail scale =
             scale
@@ -114,7 +115,7 @@ haloTriad intervals (Mode mode n) k step =
             step.data
     in
         Mode mode (n + k)
-            |> formChord (cons 2 [ 4 ])
+            |> modeToChord (cons 2 [ 4 ])
             |> .intervals
             |> Cons.toList
             |> (::) 0
@@ -128,10 +129,15 @@ haloTriad intervals (Mode mode n) k step =
 
 {-| Create arcs indicating voice leading into the 1-3-5 at this step.
 
-Position the arcs according to the currently played 1-3-5.
+Position the arcs according to the currently played tone order (low to high).
+Only lead with bottom 3 tones. When 1 tone is played, triple it to get low and
+high leading. When 2 tones are played, double the higher or lower depending on
+range. When nothing is played, show nothing.
 
-Indicate the amount of voice leading using left- or right-aligned dots. Cap at
-4?
+Indicate the amount of voice leading using left- or right-aligned dots for
+upward and downward voice leading. Also try showing hollow dots for downward leading.
+
+Use a solid bar if the voice matches.
 
 Hide for the detected root? What to show if a triad is not being played?
 
@@ -157,31 +163,25 @@ not too bad
 worst case, could cache if needed
 
 -}
-haloLeading : List Int -> Mode -> Int -> Step StepData msg -> Step StepData msg
-haloLeading intervals (Mode mode n) k step =
+haloLeading : Int -> Cons Note -> Mode -> Int -> Step StepData msg -> Step StepData msg
+haloLeading root notes_ (Mode scale n) k step =
     let
-        currentChord =
-            intervals
-                |> List.sort
-                |> List.take 3
-                |> List.map intToNote
-                |> cons2fromList
-                |> Maybe.map notesToChord
+        notes =
+            notes_ |> Cons.sort
+
+        modePlayed =
+            (Mode scale (n + k))
+
+        lowerBy =
+            (Cons.head notes) - (Cons.head notes) % 12
+
+        intervalsPlayed =
+            notes
+                |> Cons.map (\x -> x - lowerBy)
+                |> Cons.sort
 
         closestLeading =
-            Mode mode (n + k)
-                |> formChord (cons 2 [ 4 ])
-                |> rootChord (intToNote step.data.interval)
-                |> f currentChord
-                |> Maybe.andThen List.head
-
-        f a b =
-            case a of
-                Just a_ ->
-                    Just (leadingWithInversions a_ b)
-
-                Nothing ->
-                    Nothing
+            findLeading intervalsPlayed modePlayed step.data.interval |> List.head
     in
         case closestLeading of
             Just ([ ( a1, b1 ), ( a2, b2 ), ( a3, b3 ) ] as xs) ->
@@ -222,16 +222,12 @@ colorByQuality (Mode scale n) k step =
         { step | color = color }
 
 
-selectNotes : Letter -> List Note -> Step StepData msg -> Bool
+selectNotes : Note -> List Note -> Step StepData msg -> Bool
 selectNotes root noteList step =
     let
-        rootInt =
-            noteToInt { letter = root, octave = 0 }
-
         intervals =
             noteList
-                |> List.map noteToInt
-                |> List.map (\x -> (x - rootInt) % 12)
+                |> List.map (\x -> (x - root) % 12)
     in
         List.member (step.data.interval % 12) intervals
 
@@ -287,7 +283,7 @@ dotAngles maxVoice arc =
                 |> List.map position
 
         position x =
-            (arc.stop - arc.start) / (1 + toFloat maxVoice) * (0.5 + toFloat x)
+            (arc.stop - arc.start) / (toFloat maxVoice) * (-0.5 + toFloat x)
     in
         if arc.voice > 0 then
             voices |> List.map (\x -> arc.start + x)
@@ -302,17 +298,23 @@ drawDots radius maxVoice arc =
     let
         dotRadius =
             (arc.stop - arc.start)
-                / (1 + toFloat maxVoice)
-                |> (*) (0.8 * radius)
+                / (toFloat maxVoice)
+                |> (*) (0.3 * radius * 2 * pi)
+
+        color =
+            if arc.voice > 0 then
+                (rgba 50 50 50 1)
+            else
+                (rgba 50 150 50 1)
 
         dot angle =
             circle
                 [ SA.r (percent (100 * dotRadius))
-                , strokeWidth (percent (100 * dotRadius))
-                  -- , strokeWidth (percent 100)
-                , stroke black
+                , strokeWidth (percent (10 * dotRadius))
+                , stroke color
                 , SA.cx (percent (100 * radius * cos angle))
                 , SA.cy (percent (100 * radius * sin angle))
+                , fill color
                 ]
                 []
     in
