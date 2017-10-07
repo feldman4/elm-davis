@@ -1,20 +1,32 @@
+var shitty_start = function (app) {
 
-var shitty_start = function () {
+	var ports = [];
+	window.ports = ports;
+	var events = [];
+	window.events = events;
+
+	var initialize = function () {
+		navigator.requestMIDIAccess().then(window_asshole);
+	};
 
 	var window_asshole = function(midiAccess) {
-		console.log('window asshole activated')
-		window.fuckyou = midiAccess
 
+
+		// add existing ports
 		midiAccess.inputs.forEach(addMIDIPort);
-		midiAccess.addEventListener("statechange", onStateChange);
 
-	}
+		// listen to new ports
+		// timeout to avoid onStateChange when addMIDIPort runs
+		setTimeout(function () {
+			midiAccess.addEventListener("statechange", onStateChange);
+		}, 100);
 
+
+	};
 
 	var onStateChange = function(event) {
 		var port = event.port;
-		console.log('state change')
-
+		events.push(event);
 		if (port.type != "input") return;
 
 		if (port.state == "disconnected")
@@ -23,14 +35,23 @@ var shitty_start = function () {
 			addMIDIPort(port);
 	};
 
-
-	navigator.requestMIDIAccess().then(window_asshole);
-
 	var addMIDIPort = function(port) {
-		console.log('added midi port ' + [port.name, port.type])
-		window.lastport = port;
+		if (port.name.includes("Network Session")) {return;} 
+
+		console.log('added midi port ' + [port.name, port.type]);
+
 		port.addEventListener("midimessage", onMIDIMessage);
-	}
+		// notify elm of midi port change
+		ports.push(port);
+		updateElm();
+	};
+
+	var removeMIDIPort = function(port) {
+		console.log('removed midi port ' + [port.name, port.type]);
+		// notify elm of midi port change
+		remove(ports, port);
+		updateElm();
+	};
 
 	var onMIDIMessage = function(event) {
 		window.latest = event;
@@ -39,11 +60,24 @@ var shitty_start = function () {
 		if (event.data[0] === 144) {
 
 			// console.log(event.data[1])
-		}
+		};
 		// tell Elm something happened
-		var info = [event.data[0], event.data[1], event.data[2]];
-		window.app.ports.midiPort.send(info);
+		var midiNote = [event.data[0], event.data[1], event.data[2]];
+		window.app.ports.midiPort.send([event.target.name, midiNote]);
 
-		}
+	};
 
-}
+	var updateElm = function() {
+		app.ports.midiInputs.send(ports.map(x => x.name));
+	}
+
+	var remove = function(array, element){
+    var index = array.indexOf(element);
+    if (index > -1) {
+        array.splice(index, 1);
+    }
+	}
+
+
+	initialize();
+};

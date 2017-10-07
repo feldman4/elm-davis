@@ -5,6 +5,11 @@ import Cons exposing (Cons)
 import List.Extra
 
 
+strEq : a -> a -> Bool
+strEq a a_ =
+    (toString a) == (toString a_)
+
+
 {-| order matters
 -}
 permutations : Int -> List a -> List (List a)
@@ -19,6 +24,14 @@ permutations k xs =
 
             _ ->
                 List.Extra.select xs |> List.concatMap iter
+
+
+sign : comparable -> number
+sign x =
+    if x >= 0 then
+        1
+    else
+        -1
 
 
 {-| order doesn't matter.
@@ -228,38 +241,3 @@ stringReplace pattern replacement source =
 circleClamp : Int -> Int -> Int -> Int
 circleClamp low high x =
     (x - low) % (high - low) + low
-
-
-{-| start and stop in radians, radius in user units
--}
-arcCommand : Float -> Float -> Float -> String
-arcCommand start stop radius =
-    let
-        x1 =
-            radius * (cos start)
-
-        y1 =
-            radius * (sin start)
-
-        x2 =
-            radius * (cos stop)
-
-        y2 =
-            radius * (sin stop)
-
-        replace s x =
-            stringReplace s (x |> toString)
-    in
-        """
-        M x1 y1
-        A rx ry x-axis-rotation large-arc-flag sweep-flag x2 y2
-        """
-            |> replace "rx" radius
-            |> replace "ry" radius
-            |> replace "x1" x1
-            |> replace "y1" y1
-            |> replace "x2" x2
-            |> replace "y2" y2
-            |> replace "x-axis-rotation" 0
-            |> replace "large-arc-flag" 0
-            |> replace "sweep-flag" 1

@@ -1,19 +1,21 @@
 port module App exposing (Model, Msg(..), init, update, view)
 
 import AnimationFrame
+import Audio.Draw exposing (..)
 import Audio.GL exposing (..)
 import Audio.Ladder exposing (..)
 import Audio.Midi exposing (..)
 import Audio.Music exposing (middleC)
 import Audio.Types exposing (..)
 import Audio.Utility exposing (..)
-import Audio.Visual exposing (..)
+import Audio.Roll exposing (..)
 import Cons exposing (cons)
 import Html exposing (div, program, text)
 import Html.Attributes exposing (..)
 import Random exposing (Seed, initialSeed)
 import Time exposing (Time)
 import WebGL
+import Set exposing (Set)
 
 
 main : Program Never Model Msg
@@ -35,6 +37,8 @@ type alias Model =
     , noteHistory : List NoteEvent
     , time : Time
     , seed : Seed
+    , inputs : Set String
+    , selected : Maybe String
     }
 
 
@@ -44,6 +48,8 @@ init =
     , time = 0
     , seed = initialSeed 0
     , noteHistory = []
+    , inputs = Set.empty
+    , selected = Nothing
     }
         ! []
 
@@ -53,48 +59,54 @@ init =
 
 
 type Msg
-    = MIDIEvent MIDINote
+    = MIDIEvent ( String, MIDINote )
+    | MIDIInputs (List String)
+    | SelectInput String
     | Animate Time
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        MIDIEvent midiNote ->
+        MIDIEvent ( input, midiNote ) ->
             let
                 ( _, nextSeed ) =
                     Random.step Random.bool model.seed
+
+                doIt =
+                    model.selected
+                        |> Maybe.map ((==) input)
+                        |> Maybe.withDefault False
             in
-                model
-                    |> updateNote midiNote
-                    |> updateSeed midiNote
-                    |> (\x -> x ! [])
+                if doIt then
+                    model
+                        |> updateNote model.time midiNote
+                        |> updateSeed midiNote
+                        |> (\x -> x ! [])
+                else
+                    model ! []
+
+        MIDIInputs midiInputs ->
+            case model.selected of
+                Just s ->
+                    { model | inputs = midiInputs |> Set.fromList } ! []
+
+                Nothing ->
+                    ({ model
+                        | inputs = midiInputs |> Set.fromList
+                        , selected = midiInputs |> List.head
+                     }
+                    )
+                        ! []
+
+        SelectInput name ->
+            if Set.member name model.inputs then
+                { model | selected = Just name } ! []
+            else
+                { model | selected = Nothing } ! []
 
         Animate dt ->
             { model | time = model.time + (dt / 1000) } ! []
-
-
-updateNote : MIDINote -> Model -> Model
-updateNote midiNote model =
-    case midiToNote midiNote of
-        Just (NoteOn note) ->
-            { model | notes = { note = note, start = model.time, end = Nothing } :: model.notes }
-
-        Just (NoteOff note) ->
-            let
-                ( thisNote, otherNotes ) =
-                    model.notes |> List.partition (strEq note << .note)
-
-                endedNotes =
-                    thisNote |> List.map (\n -> { n | end = Just model.time })
-            in
-                { model
-                    | notes = otherNotes
-                    , noteHistory = endedNotes ++ model.noteHistory
-                }
-
-        Nothing ->
-            model
 
 
 updateSeed : MIDINote -> Model -> Model
@@ -102,17 +114,12 @@ updateSeed note model =
     model
 
 
-strEq : a -> a -> Bool
-strEq a a_ =
-    (toString a) == (toString a_)
-
-
 
 -- VIEW
 
 
 view : Model -> Html.Html Msg
-view { notes, noteHistory, time } =
+view { notes, noteHistory, time, inputs } =
     let
         noteList =
             notes
@@ -132,11 +139,12 @@ view { notes, noteHistory, time } =
                 |> List.map noteToAttr
                 |> List.map renderCrap
 
-        noteHtml =
+        pianoRoll =
             (notes ++ noteHistory)
                 |> List.map (relativeToPresent time)
-                |> svgScale 3
-                |> svgScene
+                |> buildRoll 3
+                |> rollToSvg rollNoteToSvg
+                |> (\x -> svgScene [ x ])
                 |> (\x -> div divAttributes [ x ])
 
         chordText =
@@ -153,10 +161,12 @@ view { notes, noteHistory, time } =
                 entities
 
         root =
-            noteHistory |> establishRoot |> Maybe.withDefault (middleC |> noteToInt)
+            noteHistory
+                |> establishRoot
+                |> Maybe.withDefault (noteToInt middleC % 12)
 
         colorNotes c =
-            updateStepsSimple (selectNotes root noteList) (rgbStep c)
+            updateStepsSimple (selectNotes root noteList) (colorStep c)
 
         lightenUnplayedNotes saturation lightness =
             updateStepsSimple
@@ -192,10 +202,10 @@ view { notes, noteHistory, time } =
     in
         div [ style [ ( "text-align", "center" ) ] ]
             [ ladderHtml
-            , Html.br [] []
-            , noteHtml
+            , pianoRoll
             , chordText
             , noteText
+            , displayChannels (inputs |> Set.toList) SelectInput
               -- , glTriangles
             ]
 
@@ -207,6 +217,7 @@ view { notes, noteHistory, time } =
 subscriptions : Model -> Sub Msg
 subscriptions model =
     [ midiPort MIDIEvent
+    , midiInputs MIDIInputs
     , AnimationFrame.diffs Animate
     ]
         |> Sub.batch
@@ -224,4 +235,7 @@ subscriptions model =
 -- PORTS
 
 
-port midiPort : (( Int, Int, Int ) -> msg) -> Sub msg
+port midiPort : (( String, ( Int, Int, Int ) ) -> msg) -> Sub msg
+
+
+port midiInputs : (List String -> msg) -> Sub msg

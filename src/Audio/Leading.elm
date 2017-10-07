@@ -3,6 +3,7 @@ module Audio.Leading exposing (..)
 import Audio.Music exposing (..)
 import Audio.Utility exposing (..)
 import Cons exposing (Cons, cons)
+import List.Extra
 
 
 {- Create arcs indicating voice leading into the 1-3-5 at this step.
@@ -43,22 +44,67 @@ import Cons exposing (Cons, cons)
 -}
 
 
+{-| Return pairs of intervals.
+
+
+Need to search inversions of second chord.
+
+
+-}
+leading : Rooted Chord -> Rooted Chord -> List (List ( Int, Int ))
+leading first second =
+    let
+        a =
+            first |> chordToNotes |> Cons.toList
+
+        b =
+            second |> chordToNotes |> Cons.toList
+
+        k =
+            List.length a
+
+        cost ( x, y ) =
+            abs (x - y)
+    in
+        b
+            |> permutations k
+            |> List.map (List.Extra.zip a)
+            |> List.sortBy (List.map cost >> List.sum)
+
+
+leadingWithInversions : Rooted Chord -> Rooted Chord -> List (List ( Int, Int ))
+leadingWithInversions first second =
+    let
+        cost ( x, y ) =
+            abs (x - y)
+
+        shift y =
+            { second | root = second.root |> (\x -> x + (12 * y)) }
+
+        seconds =
+            [ -2, -1, 0, 1, 2 ]
+                |> List.concatMap (\x -> allInversions (shift x))
+    in
+        seconds
+            |> List.concatMap (leading first)
+            |> List.sortBy (List.map cost >> List.sum)
+
+
 findLeading : Cons Int -> Mode -> Int -> List (List ( Int, Int ))
 findLeading intervalsPlayed mode intervalStep =
     let
         intervalsUsed =
-            case intervalsPlayed |> Cons.sort |> Cons.uncons of
+            case intervalsPlayed |> Cons.sort |> Cons.reverse |> Cons.uncons of
                 ( a, b :: c :: rest ) ->
-                    [ a, b, c ]
+                    [ a, b, c ] |> List.reverse
 
                 ( a, [ b ] ) ->
-                    [ a, b, b ]
+                    -- [ a, b, b ]
+                    []
 
                 ( a, [] ) ->
-                    [ a, a, a ]
-
-        lowest =
-            intervalsUsed |> List.head |> Maybe.withDefault 0
+                    -- [ a, a, a ]
+                    []
 
         first =
             intervalsUsed
@@ -72,7 +118,6 @@ findLeading intervalsPlayed mode intervalStep =
                 |> rootChord intervalStep
                 |> chordToNotes
                 |> Cons.toList
-                |> List.map (circleClamp (lowest - 12) (lowest))
                 |> cons2fromList
                 |> Maybe.map notesToChord
     in

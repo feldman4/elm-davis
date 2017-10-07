@@ -3,7 +3,6 @@ module Audio.Music exposing (..)
 import Audio.Types exposing (..)
 import Audio.Utility exposing (..)
 import Cons exposing (Cons, cons)
-import List.Extra
 
 
 {-| represents a scale and a mode within the scale
@@ -134,58 +133,11 @@ rootChord note chord =
     { root = note, intervals = chord.intervals }
 
 
-leadingWithInversions : Rooted Chord -> Rooted Chord -> List (List ( Int, Int ))
-leadingWithInversions first second =
-    let
-        cost ( x, y ) =
-            abs (x - y)
-
-        lower =
-            { second | root = first.root |> (\x -> x - 12) }
-    in
-        (allInversions second ++ allInversions lower)
-            |> List.concatMap (leading first)
-            |> List.sortBy (List.map cost >> List.sum)
-
-
-{-| Return pairs of intervals.
-
-
-Need to search inversions of second chord.
-
-
--}
-leading : Rooted Chord -> Rooted Chord -> List (List ( Int, Int ))
-leading first second =
-    let
-        a =
-            first |> chordToNotes |> Cons.toList
-
-        b =
-            second |> chordToNotes |> Cons.toList
-
-        k =
-            List.length a
-
-        cost ( x, y ) =
-            abs (x - y)
-    in
-        b
-            |> permutations k
-            |> List.map (List.Extra.zip a)
-            |> List.sortBy (List.map cost >> List.sum)
-
-
-
--- |> List.head
--- |> Maybe.withDefault []
-
-
 bigFour : List Mode
 bigFour =
     -- [ NaturalMajor, NaturalMinor, HarmonicMinor, HarmonicMajor ]
-    [ NaturalMajor ]
-        |> List.map (\x -> Mode x 0)
+    -- |> List.map (\x -> Mode x 0)
+    [ Mode NaturalMinor 0, Mode NaturalMinor 2 ]
 
 
 analyzeChord : Chord_ a -> { quality : Maybe ChordQuality }
@@ -348,3 +300,18 @@ getTriadQuality a b =
 
         ( MajorTriad, MajorTriad ) ->
             Augmented
+
+
+printChord : Rooted Chord -> Maybe String
+printChord chord =
+    let
+        root =
+            chord.root |> intToNote |> .letter |> letterToString
+
+        quality =
+            chord |> getChordQuality
+
+        print =
+            (\a b -> [ a, toString b ] |> String.join " ")
+    in
+        Maybe.map2 print (Just root) quality

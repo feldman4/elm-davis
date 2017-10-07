@@ -5,7 +5,7 @@ module Audio.Ladder
         , stepToSvg
         , updateSteps
         , updateStepsSimple
-        , rgbStep
+        , colorStep
         , alphaStep
         , saturationStep
         , lightnessStep
@@ -16,6 +16,7 @@ module Audio.Ladder
         , haloLeading
         )
 
+import Audio.Draw exposing (..)
 import Audio.Leading exposing (..)
 import Audio.Music exposing (..)
 import Audio.Types exposing (..)
@@ -38,9 +39,8 @@ modesToLadder : List Mode -> Ladder Mode StepData msg
 modesToLadder scales =
     let
         step ( n, y ) =
-            { data = { interval = n, arcs = [] }
+            { data = { interval = n, arcs = [], color = rgba 1 1 1 1 }
             , attributes = [ stroke (rgba 0 0 0 1) ]
-            , color = rgba 1 1 1 1
             , transform = M4.identity |> M4.translate3 0 (1 - y) 0
             }
 
@@ -48,7 +48,6 @@ modesToLadder scales =
             { data = steps
             , attributes = []
             , transform = M4.identity
-            , color = rgba 0 0 0 1
             }
 
         double xs =
@@ -60,8 +59,8 @@ modesToLadder scales =
         rootIntervals =
             modeToIntervals >> double >> (List.scanl (+) 0)
 
-        makeRail scale =
-            scale
+        makeRail scaleFromCenter =
+            scaleFromCenter
                 |> (\x -> List.Extra.zip (rootIntervals x) (positions x))
                 |> List.map step
                 |> rail
@@ -89,6 +88,7 @@ createArcs n_ =
                     , stop = (1 / n) * ((toFloat i) + 0.9) + (1 / 12)
                     , color = rgba 150 150 150 1
                     , voice = 0
+                    , index = i
                     }
                 )
 
@@ -164,16 +164,16 @@ worst case, could cache if needed
 
 -}
 haloLeading : Int -> Cons Note -> Mode -> Int -> Step StepData msg -> Step StepData msg
-haloLeading root notes_ (Mode scale n) k step =
+haloLeading root notes_ (Mode scaleFromCenter n) k step =
     let
         notes =
             notes_ |> Cons.sort
 
         modePlayed =
-            (Mode scale (n + k))
+            (Mode scaleFromCenter (n + k))
 
         lowerBy =
-            (Cons.head notes) - (Cons.head notes) % 12
+            (Cons.head notes) - (Cons.head notes) % 12 + root
 
         intervalsPlayed =
             notes
@@ -196,16 +196,16 @@ haloLeading root notes_ (Mode scale n) k step =
                 step
 
 
-colorByQuality : Mode -> Int -> Step a msg -> Step a msg
-colorByQuality (Mode scale n) k step =
+colorByQuality : Mode -> Int -> Step StepData msg -> Step StepData msg
+colorByQuality (Mode scaleFromCenter n) k step =
     let
         quality =
-            (Mode scale (n + k)) |> chordInScale
+            (Mode scaleFromCenter (n + k)) |> chordInScale
 
         color =
             case quality of
                 Nothing ->
-                    step.color
+                    step.data.color
 
                 Just Major ->
                     rgba 250 100 100 1
@@ -219,7 +219,7 @@ colorByQuality (Mode scale n) k step =
                 Just Augmented ->
                     rgba 100 250 100 1
     in
-        { step | color = color }
+        mapData (\x -> { x | color = color }) step
 
 
 selectNotes : Note -> List Note -> Step StepData msg -> Bool
@@ -232,40 +232,43 @@ selectNotes root noteList step =
         List.member (step.data.interval % 12) intervals
 
 
-rgbStep : Color -> Step a msg -> Step a msg
-rgbStep color step =
-    color
-        |> Color.toRgb
-        |> (\c -> Color.rgba c.red c.green c.blue (step.color |> Color.toRgb |> .alpha))
-        |> (\c -> { step | color = c })
+mapStepColor : (Color -> Color) -> Step StepData msg -> Step StepData msg
+mapStepColor f step =
+    f step.data.color
+        |> (\c -> mapData (\x -> { x | color = c }) step)
 
 
-alphaStep : Float -> Step a msg -> Step a msg
+colorStep : Color -> Step StepData msg -> Step StepData msg
+colorStep color =
+    mapStepColor (\_ -> color)
+
+
+alphaStep : Float -> Step StepData msg -> Step StepData msg
 alphaStep alpha step =
-    step.color
+    step.data.color
         |> Color.toRgb
         |> (\c -> Color.rgba c.red c.green c.blue alpha)
-        |> (\c -> { step | color = c })
+        |> (\c -> mapData (\x -> { x | color = c }) step)
 
 
-saturationStep : Float -> Step a msg -> Step a msg
+saturationStep : Float -> Step StepData msg -> Step StepData msg
 saturationStep saturation step =
-    step.color
+    step.data.color
         |> Color.toHsl
         |> (\c -> Color.hsla c.hue saturation c.lightness c.alpha)
-        |> (\c -> { step | color = c })
+        |> (\c -> mapData (\x -> { x | color = c }) step)
 
 
-lightnessStep : Float -> Step a msg -> Step a msg
+lightnessStep : Float -> Step StepData msg -> Step StepData msg
 lightnessStep lightness step =
     let
         compress a b =
             1 - (1 - a) * b
     in
-        step.color
+        step.data.color
             |> Color.toHsl
             |> (\c -> Color.hsla c.hue c.saturation (compress c.lightness lightness) c.alpha)
-            |> (\c -> { step | color = c })
+            |> (\c -> mapData (\x -> { x | color = c }) step)
 
 
 
@@ -323,8 +326,44 @@ drawDots radius maxVoice arc =
             |> List.map dot
 
 
-drawArc : Step a msg -> List (TypedSvg.Core.Attribute msg) -> Arc -> Svg msg
-drawArc step position arc =
+drawDotsSide : Int -> Int -> Arc -> List (Svg msg)
+drawDotsSide maxVoice index arc =
+    let
+        color =
+            if arc.voice > 0 then
+                (rgba 50 50 50 1)
+            else
+                (rgba 50 150 50 1)
+
+        dotRadius =
+            (0.5 * 1.6) / (toFloat maxVoice)
+
+        xOffset =
+            xInc * 3 + 1.6
+
+        xInc =
+            dotRadius * 2.2
+
+        yInc =
+            dotRadius * 2.7
+
+        place j =
+            circle
+                [ SA.cy (percent (100 * yInc * (1 - toFloat index)))
+                , SA.cx (percent (100 * (xOffset + toFloat j * xInc * (sign arc.voice))))
+                , stroke color
+                , strokeWidth (percent 0)
+                , fill color
+                , SA.r (percent (100 * dotRadius))
+                ]
+                []
+    in
+        List.range 0 (abs arc.voice - 1)
+            |> List.map place
+
+
+arcToSvg : Step StepData msg -> Int -> Arc -> Svg msg
+arcToSvg step index arc =
     let
         radius =
             1.6
@@ -332,8 +371,10 @@ drawArc step position arc =
         width =
             percent 20
 
+        -- dotSvg =
+        --     drawDots radius 3 arc
         dotSvg =
-            drawDots (radius) 3 arc
+            drawDotsSide 3 index arc
 
         arcSvg =
             path
@@ -341,7 +382,7 @@ drawArc step position arc =
                  , noFill
                  , stroke arc.color
                  , strokeWidth width
-                 , opacity (step.color |> Color.toRgb |> .alpha |> (\x -> x ^ 2))
+                 , opacity (step.data.color |> Color.toRgb |> .alpha |> (\x -> x ^ 2))
                  ]
                 )
                 []
@@ -353,18 +394,18 @@ stepToSvg : Step StepData msg -> Svg msg
 stepToSvg step =
     let
         position =
-            [ transform [ step.transform |> M4.scale3 0.025 0.025 1 |> tMatrix ] ]
+            [ step.transform |> M4.scale3 0.025 0.025 1 |> transformToAttribute ]
 
         arcs =
-            step.data.arcs |> List.map (drawArc step position)
+            step.data.arcs |> List.indexedMap (arcToSvg step)
     in
         g position
             ([ circle
                 ([ SA.r (percent 100)
                  , stroke black
                  , strokeWidth (percent 28)
-                 , fill step.color
-                 , opacity (step.color |> Color.toRgb |> .alpha)
+                 , fill step.data.color
+                 , opacity (step.data.color |> Color.toRgb |> .alpha)
                  ]
                     ++ step.attributes
                 )
@@ -382,11 +423,11 @@ railToSvg drawStep rail =
             , SA.x2 (percent 0)
             , SA.y1 (percent 0)
             , SA.y2 (percent 100)
-            , transform [ tMatrix rail.transform ]
+            , transformToAttribute rail.transform
             ]
 
         barStroke =
-            [ stroke black, strokeWidth (percent 1) ]
+            [ stroke (gray), strokeWidth (percent 1) ]
 
         bar =
             line (barPosition ++ barStroke) []
@@ -409,7 +450,7 @@ ladderToSvg drawStep ladder =
 
         adjust i ( name, rail ) =
             rail
-                |> scale 0.9 0.9
+                |> scaleFromCenter 0.9 0.9
                 |> translate ((i |> toFloat |> (+) 0.5) / n) 0
                 |> railToSvg drawStep
     in
@@ -449,13 +490,6 @@ addAttribute attr x =
     { x | attributes = x.attributes ++ [ attr ] }
 
 
-tMatrix : Mat4 -> TypedSvg.Types.Transform
-tMatrix mat4 =
-    mat4
-        |> M4.toRecord
-        |> (\m -> TypedSvg.Types.Matrix m.m11 m.m21 m.m12 m.m22 m.m14 m.m24)
-
-
 tScale : Float -> Float -> TypedSvg.Types.Transform
 tScale =
     TypedSvg.Types.Scale
@@ -464,20 +498,6 @@ tScale =
 tTranslate : Float -> Float -> TypedSvg.Types.Transform
 tTranslate =
     TypedSvg.Types.Translate
-
-
-fill : Color -> TypedSvg.Core.Attribute msg
-fill color =
-    SA.fill (TypedSvg.Types.Fill color)
-
-
-opacity : Float -> TypedSvg.Core.Attribute msg
-opacity fraction =
-    SA.opacity (TypedSvg.Types.Opacity fraction)
-
-
-
--- MAP/TRANSFORM
 
 
 mapStep : (a -> Int -> Step b msg -> Step c msg) -> Ladder a b msg -> Ladder a c msg
@@ -491,58 +511,8 @@ mapStep f ladder =
             |> (\x -> { ladder | rails = x })
 
 
-{-| opportunity for lens
--}
-translate :
-    Float
-    -> Float
-    -> { a | transform : Mat4 }
-    -> { a | transform : Mat4 }
-translate x y =
-    mapTransform (M4.translate3 x y 0)
-
-
-scale : Float -> Float -> { a | transform : Mat4 } -> { a | transform : Mat4 }
-scale x y =
-    mapTransform (fromCenter (M4.scale3 x y 1))
-
-
-mapTransform : (a -> b) -> { c | transform : a } -> { c | transform : b }
-mapTransform f m =
-    { m | transform = f m.transform }
-
-
-fromCenter : (Mat4 -> Mat4) -> Mat4 -> Mat4
-fromCenter f =
-    (M4.translate3 -0.5 -0.5 0) << f << (M4.translate3 0.5 0.5 0)
-
-
-mapData : (a -> b) -> { c | data : a } -> { c | data : b }
-mapData f x =
-    { x | data = f x.data }
-
-
-transformChildren :
-    { b | transform : Mat4, data : List { a | transform : Mat4 } }
-    -> { b | transform : Mat4, data : List { a | transform : Mat4 } }
-transformChildren x =
-    let
-        f =
-            mapTransform (M4.mul x.transform)
-    in
-        { x | data = List.map f x.data }
-
-
 
 -- TYPES
-
-
-type alias WrappedSvg data msg =
-    { data : data
-    , attributes : List (TypedSvg.Core.Attribute msg)
-    , color : Color
-    , transform : Mat4
-    }
 
 
 type alias Step data msg =
@@ -558,11 +528,11 @@ type alias Rung msg =
 
 
 type alias Arc =
-    { start : Float, stop : Float, color : Color, voice : Int }
+    { start : Float, stop : Float, color : Color, voice : Int, index : Int }
 
 
 type alias StepData =
-    { interval : Int, arcs : List Arc }
+    { interval : Int, arcs : List Arc, color : Color }
 
 
 {-| awkward to store name in tuple list, awkward to modify Rail to store name
