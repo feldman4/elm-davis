@@ -23,24 +23,6 @@ import Math.Matrix4 as M4
     - can also select svg class tags with css
 
 -}
-
-
-tScale : Float -> Float -> TypedSvg.Types.Transform
-tScale =
-    TypedSvg.Types.Scale
-
-
-tTranslate : Float -> Float -> TypedSvg.Types.Transform
-tTranslate =
-    TypedSvg.Types.Translate
-
-
-eventPosition : Float -> Maybe Float -> List (TypedSvg.Core.Attribute msg)
-eventPosition start end =
-    [ SA.x1 (percent (end |> Maybe.withDefault 0)), SA.x2 (percent start) ]
-
-
-
 -- BUILD
 
 
@@ -81,7 +63,7 @@ rollNoteToSvg rollNote =
         yPosition =
             rollNote.data.noteEvent.note
                 |> (\x -> 1 - (toFloat (x % 12)) / 12)
-                |> (+) (1 / 24)
+                |> (\x -> x - (1 / 24))
                 |> (+) (yOffset * 0.015)
 
         end =

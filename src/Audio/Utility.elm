@@ -196,26 +196,6 @@ letterToString letter =
             "G#"
 
 
-intToNote : Int -> FullNote
-intToNote intNote =
-    let
-        letters =
-            [ C, C_, D, D_, E, F, F_, G, G_, A, A_, B ]
-    in
-        { letter =
-            letters
-                |> List.drop (intNote % 12)
-                |> List.head
-                |> Maybe.withDefault A
-        , octave = (floor ((intNote |> toFloat) / 12)) - 1
-        }
-
-
-noteToInt : FullNote -> Int
-noteToInt note =
-    note.letter |> letterToPosition |> (+) ((note.octave + 1) * 12)
-
-
 relativeToPresent : Float -> NoteEvent -> NoteEvent
 relativeToPresent time noteEvent =
     let

@@ -2,6 +2,7 @@ module Audio.Midi exposing (..)
 
 import Audio.Types exposing (..)
 import Audio.Utility exposing (..)
+import Audio.Music exposing (..)
 
 
 updateNote :
@@ -52,6 +53,43 @@ midiToNote ( datatype, intNote, velocity ) =
             Nothing
 
 
+{-| notes are sorted from most recent start to earliest start
+-}
+lastChord : List NoteEvent -> List NoteEvent
+lastChord =
+    lastChordIter []
+
+
+lastChordIter : List NoteEvent -> List NoteEvent -> List NoteEvent
+lastChordIter soFar noteEvents =
+    let
+        sortByStart =
+            List.sortBy (\n -> -1 * n.start)
+    in
+        case ( soFar, noteEvents ) of
+            ( _, [] ) ->
+                soFar
+
+            ( [], noteEvent :: rest ) ->
+                case noteEvent.end of
+                    Nothing ->
+                        lastChordIter [ noteEvent ] rest
+
+                    Just _ ->
+                        []
+
+            ( later :: _, earlier :: rest ) ->
+                case earlier.end of
+                    Nothing ->
+                        lastChordIter (sortByStart (earlier :: soFar)) rest
+
+                    Just end ->
+                        if end < later.start then
+                            soFar
+                        else
+                            lastChordIter (sortByStart (earlier :: soFar)) rest
+
+
 
 {-
    entrance to rabbit hole
@@ -64,24 +102,36 @@ midiToNote ( datatype, intNote, velocity ) =
 
 establishRoot : List NoteEvent -> Maybe Note
 establishRoot noteEventList =
-    -- Just 0
-    noteEventList |> List.map .note |> rootPattern
+    Just 0
+
+
+
+-- noteEventList |> List.map .note |> rootPattern
 
 
 rootPattern : List Note -> Maybe Int
 rootPattern noteList =
-    case noteList of
-        x1 :: x2 :: x3 :: x4 :: x5 :: rest ->
-            if (x1 == x2) && (x1 == x3) && (x1 == x4) && (x1 == x5) then
-                -- if (x4 - x5 == 0) && (x3 - x4 == 2) && (x2 - x3 == 2) && ((x1 - x2 |> Debug.log "d") == 1) then
-                Just (x1 % 12 |> Debug.log "")
-            else
-                case rest of
-                    [] ->
-                        Nothing
+    let
+        repeat4 x1 x2 x3 x4 x5 =
+            (x1 == x2) && (x1 == x3) && (x1 == x4) && (x1 == x5)
 
-                    _ ->
-                        rootPattern (List.drop 1 noteList)
+        octave2 x1 =
+            x1 < fullNoteToNote { letter = E, octave = 3 }
+    in
+        case noteList of
+            x1 :: x2 :: x3 :: x4 :: x5 :: rest ->
+                if
+                    repeat4 x1 x2 x3 x4 x5
+                    -- && octave2 x1
+                then
+                    Just (x1 % 12)
+                else
+                    case rest of
+                        [] ->
+                            Nothing
 
-        _ ->
-            Nothing
+                        _ ->
+                            rootPattern (List.drop 1 noteList)
+
+            _ ->
+                Nothing

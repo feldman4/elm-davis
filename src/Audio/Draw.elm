@@ -29,23 +29,30 @@ type alias Colored a =
     { a | color : Color }
 
 
-displayChannels : List String -> (String -> msg) -> Html msg
-displayChannels names clickRespond =
-    let
-        nameStyle =
-            hover [ ( "color", "blue", "lightblue" ) ]
 
-        makeDiv name =
-            div (onClick (clickRespond name) :: nameStyle) [ text name ]
-    in
-        names
-            |> List.map makeDiv
-            |> div []
+-- HTML
 
 
 svgScene : List (Svg a) -> Html a
 svgScene =
     svg [ SA.width (percent 100), SA.height (percent 100), viewBox 0 0 1 1 ]
+
+
+displayChannels : List ( String, Bool ) -> (String -> msg) -> Html msg
+displayChannels names clickRespond =
+    let
+        nameStyle active =
+            if active then
+                hover [ ( "color", "blue", "lightblue" ) ]
+            else
+                hover [ ( "color", "gray", "lightblue" ) ]
+
+        makeDiv ( name, active ) =
+            div (onClick (clickRespond name) :: nameStyle active) [ text name ]
+    in
+        names
+            |> List.map makeDiv
+            |> div []
 
 
 
@@ -63,7 +70,21 @@ opacity fraction =
 
 
 
--- MAP/transform
+-- TRANSFORM
+
+
+fromCenter : (Mat4 -> Mat4) -> Mat4 -> Mat4
+fromCenter f =
+    (M4.translate3 -0.5 -0.5 0) << f << (M4.translate3 0.5 0.5 0)
+
+
+scaleFromCenter3 : Float -> Float -> Float -> Mat4 -> Mat4
+scaleFromCenter3 x y z =
+    M4.scale3 x y z |> fromCenter
+
+
+
+-- MAP
 
 
 {-| opportunity for lens
@@ -87,35 +108,14 @@ scaleFromCenter x y =
     mapTransform (fromCenter (M4.scale3 x y 1))
 
 
-scaleFromCenter3 : Float -> Float -> Float -> Mat4 -> Mat4
-scaleFromCenter3 x y z =
-    M4.scale3 x y z |> fromCenter
-
-
 mapTransform : (a -> b) -> { c | transform : a } -> { c | transform : b }
 mapTransform f m =
     { m | transform = f m.transform }
 
 
-fromCenter : (Mat4 -> Mat4) -> Mat4 -> Mat4
-fromCenter f =
-    (M4.translate3 -0.5 -0.5 0) << f << (M4.translate3 0.5 0.5 0)
-
-
 mapData : (a -> b) -> { c | data : a } -> { c | data : b }
 mapData f x =
     { x | data = f x.data }
-
-
-transformChildren :
-    { b | transform : Mat4, data : List { a | transform : Mat4 } }
-    -> { b | transform : Mat4, data : List { a | transform : Mat4 } }
-transformChildren x =
-    let
-        f =
-            mapTransform (M4.mul x.transform)
-    in
-        { x | data = List.map f x.data }
 
 
 transformToAttribute : Mat4 -> TypedSvg.Core.Attribute msg
@@ -204,7 +204,7 @@ noteToAttr : Note -> Attributes
 noteToAttr note =
     let
         { letter, octave } =
-            note |> intToNote
+            note |> noteToFullNote
 
         color =
             letter |> letterToColor

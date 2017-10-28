@@ -5,17 +5,16 @@ import Audio.Draw exposing (..)
 import Audio.GL exposing (..)
 import Audio.Ladder exposing (..)
 import Audio.Midi exposing (..)
-import Audio.Music exposing (middleC)
+import Audio.Music exposing (..)
+import Audio.Roll exposing (..)
 import Audio.Types exposing (..)
 import Audio.Utility exposing (..)
-import Audio.Roll exposing (..)
 import Cons exposing (cons)
+import Dict exposing (Dict)
 import Html exposing (div, program, text)
 import Html.Attributes exposing (..)
-import Random exposing (Seed, initialSeed)
+import List.Extra
 import Time exposing (Time)
-import WebGL
-import Set exposing (Set)
 
 
 main : Program Never Model Msg
@@ -36,9 +35,7 @@ type alias Model =
     { notes : List NoteEvent
     , noteHistory : List NoteEvent
     , time : Time
-    , seed : Seed
-    , inputs : Set String
-    , selected : Maybe String
+    , inputs : Dict String Bool
     }
 
 
@@ -46,10 +43,8 @@ init : ( Model, Cmd Msg )
 init =
     { notes = []
     , time = 0
-    , seed = initialSeed 0
     , noteHistory = []
-    , inputs = Set.empty
-    , selected = Nothing
+    , inputs = Dict.empty
     }
         ! []
 
@@ -70,48 +65,36 @@ update msg model =
     case msg of
         MIDIEvent ( input, midiNote ) ->
             let
-                ( _, nextSeed ) =
-                    Random.step Random.bool model.seed
-
-                doIt =
-                    model.selected
-                        |> Maybe.map ((==) input)
-                        |> Maybe.withDefault False
+                selected =
+                    model.inputs
+                        |> Dict.toList
+                        |> List.filter (\( a, b ) -> b)
+                        |> List.map (\( a, b ) -> a)
             in
-                if doIt then
+                if List.member input selected then
                     model
                         |> updateNote model.time midiNote
-                        |> updateSeed midiNote
                         |> (\x -> x ! [])
                 else
                     model ! []
 
         MIDIInputs midiInputs ->
-            case model.selected of
-                Just s ->
-                    { model | inputs = midiInputs |> Set.fromList } ! []
-
-                Nothing ->
-                    ({ model
-                        | inputs = midiInputs |> Set.fromList
-                        , selected = midiInputs |> List.head
-                     }
-                    )
-                        ! []
+            { model | inputs = List.foldl (\k d -> Dict.insert k True d) model.inputs midiInputs } ! []
 
         SelectInput name ->
-            if Set.member name model.inputs then
-                { model | selected = Just name } ! []
-            else
-                { model | selected = Nothing } ! []
+            let
+                toggle value =
+                    case value of
+                        Just bool ->
+                            Just (not bool)
+
+                        Nothing ->
+                            Nothing
+            in
+                { model | inputs = model.inputs |> Dict.update name toggle, notes = [] } ! []
 
         Animate dt ->
             { model | time = model.time + (dt / 1000) } ! []
-
-
-updateSeed : MIDINote -> Model -> Model
-updateSeed note model =
-    model
 
 
 
@@ -119,28 +102,34 @@ updateSeed note model =
 
 
 view : Model -> Html.Html Msg
-view { notes, noteHistory, time, inputs } =
+view ({ noteHistory, time, inputs } as model) =
     let
-        noteList =
-            notes
+        notes =
+            model.notes
                 |> List.map .note
 
-        noteText =
-            noteList
-                |> List.map (intToNote >> noteToString)
+        chord =
+            (model.notes ++ noteHistory)
+                |> lastChord
+                |> List.map .note
+                |> List.Extra.unique
+
+        notesToText label notes_ =
+            notes_
+                |> List.map (noteToFullNote >> noteToString)
                 |> String.join ","
-                |> (++) "notes: "
+                |> (++) label
                 |> text
                 |> (\x -> div [] [ x ])
 
-        entities =
-            notes
-                |> List.map .note
+        glTriangles =
+            chord
                 |> List.map noteToAttr
                 |> List.map renderCrap
+                |> entitiesToHtml
 
         pianoRoll =
-            (notes ++ noteHistory)
+            (model.notes ++ noteHistory)
                 |> List.map (relativeToPresent time)
                 |> buildRoll 3
                 |> rollToSvg rollNoteToSvg
@@ -148,40 +137,30 @@ view { notes, noteHistory, time, inputs } =
                 |> (\x -> div divAttributes [ x ])
 
         chordText =
-            notes |> List.map .note |> printPossibleChords
-
-        glTriangles =
-            WebGL.toHtml
-                [ width 400
-                  -- window.width
-                , height 300
-                  -- window.height
-                , style [ ( "display", "block" ) ]
-                ]
-                entities
+            chord |> printPossibleChords
 
         root =
             noteHistory
                 |> establishRoot
-                |> Maybe.withDefault (noteToInt middleC % 12)
+                |> Maybe.withDefault (fullNoteToNote middleC % 12)
 
         colorNotes c =
-            updateStepsSimple (selectNotes root noteList) (colorStep c)
+            updateStepsSimple (selectNotes root chord) (colorStep c)
 
         lightenUnplayedNotes saturation lightness =
             updateStepsSimple
-                (selectNotes root noteList >> not)
+                (selectNotes root chord >> not)
                 ((saturationStep saturation) >> (lightnessStep lightness))
 
         intervals =
-            noteList
+            notes
                 |> List.map (\x -> (x - root) % 12)
 
         divAttributes =
             [ style [ ( "height", "45%" ), ( "margin", "0 auto" ), ( "display", "block" ) ] ]
 
         halo =
-            case noteList |> Cons.fromList of
+            case chord |> Cons.fromList of
                 Just xs ->
                     (haloLeading root xs)
 
@@ -193,19 +172,20 @@ view { notes, noteHistory, time, inputs } =
                 |> modesToLadder
                 |> mapStep colorByQuality
                 |> lightenUnplayedNotes 0.6 0.3
+                |> updateSteps (\_ _ _ -> True) halo
                 -- |> updateSteps (\_ _ _ -> True) (haloTriad intervals)
                 |>
-                    updateSteps (\_ _ _ -> True) halo
-                |> ladderToSvg stepToSvg
+                    ladderToSvg stepToSvg
                 |> (\x -> svgScene [ x ])
                 |> (\x -> div divAttributes [ x ])
     in
         div [ style [ ( "text-align", "center" ) ] ]
             [ ladderHtml
             , pianoRoll
+            , displayChannels (inputs |> Dict.toList) SelectInput
             , chordText
-            , noteText
-            , displayChannels (inputs |> Set.toList) SelectInput
+            , notesToText "notes: " notes
+            , notesToText "chord notes: " chord
               -- , glTriangles
             ]
 
@@ -224,14 +204,6 @@ subscriptions model =
 
 
 
---     [
---     , Keyboard.downs (keyChange True)
---     , Keyboard.ups (keyChange False)
---     , Window.resizes Resize
---     , Drag.subscriptions DragMsg model.dragModel
---     , Sub.map SpeechMsg (Speech.subscriptions model.speechModel)
---     ]
---         |> Sub.batch
 -- PORTS
 
 

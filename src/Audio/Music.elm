@@ -14,6 +14,8 @@ type Mode
 type Scale
     = NaturalMinor
     | NaturalMajor
+    | MelodicMinor
+    | MelodicMajor
     | HarmonicMajor
     | HarmonicMinor
 
@@ -75,14 +77,14 @@ exampleMajor =
 exampleRootedMinor : Rooted Chord
 exampleRootedMinor =
     { intervals = exampleMinor.intervals
-    , root = { letter = A, octave = 3 } |> noteToInt
+    , root = { letter = A, octave = 3 } |> fullNoteToNote
     }
 
 
 exampleRootedMajor : Rooted Chord
 exampleRootedMajor =
     { intervals = exampleMajor.intervals
-    , root = { letter = A, octave = 3 } |> noteToInt
+    , root = { letter = A, octave = 3 } |> fullNoteToNote
     }
 
 
@@ -98,19 +100,14 @@ exampleInvertedMajor =
 aMinor : Rooted Chord
 aMinor =
     { intervals = exampleMinor.intervals
-    , root = { letter = A, octave = 3 } |> noteToInt
+    , root = { letter = A, octave = 3 } |> fullNoteToNote
     }
-
-
-
--- |> invertRootedChord
--- |> invertRootedChord
 
 
 cMajor : Rooted Chord
 cMajor =
     { intervals = exampleMajor.intervals
-    , root = { letter = C, octave = 4 } |> noteToInt
+    , root = { letter = C, octave = 4 } |> fullNoteToNote
     }
 
 
@@ -135,9 +132,9 @@ rootChord note chord =
 
 bigFour : List Mode
 bigFour =
-    -- [ NaturalMajor, NaturalMinor, HarmonicMinor, HarmonicMajor ]
-    -- |> List.map (\x -> Mode x 0)
-    [ Mode NaturalMinor 0, Mode NaturalMinor 2 ]
+    -- [ MelodicMajor, HarmonicMinor, MelodicMinor, HarmonicMajor ]
+    --     |> List.map (\x -> Mode x 0)
+    [ Mode MelodicMajor 0, Mode MelodicMajor 5 ]
 
 
 analyzeChord : Chord_ a -> { quality : Maybe ChordQuality }
@@ -155,14 +152,20 @@ chordToNotes { intervals, root } =
 modeToIntervals : Mode -> List Int
 modeToIntervals scale =
     case scale of
-        Mode NaturalMinor mode ->
-            rotate mode [ 2, 1, 2, 2, 1, 2, 2 ]
-
         Mode NaturalMajor mode ->
             rotate mode [ 2, 2, 1, 2, 2, 2, 1 ]
 
+        Mode MelodicMajor mode ->
+            modeToIntervals (Mode NaturalMajor mode)
+
+        Mode NaturalMinor mode ->
+            modeToIntervals (Mode NaturalMajor (mode + 5))
+
         Mode HarmonicMinor mode ->
             rotate mode [ 2, 1, 2, 2, 1, 3, 1 ]
+
+        Mode MelodicMinor mode ->
+            rotate mode [ 2, 1, 2, 2, 2, 2, 1 ]
 
         Mode HarmonicMajor mode ->
             rotate mode [ 2, 2, 1, 2, 1, 3, 1 ]
@@ -306,7 +309,7 @@ printChord : Rooted Chord -> Maybe String
 printChord chord =
     let
         root =
-            chord.root |> intToNote |> .letter |> letterToString
+            chord.root |> noteToFullNote |> .letter |> letterToString
 
         quality =
             chord |> getChordQuality
@@ -315,3 +318,27 @@ printChord chord =
             (\a b -> [ a, toString b ] |> String.join " ")
     in
         Maybe.map2 print (Just root) quality
+
+
+
+--
+
+
+noteToFullNote : Int -> FullNote
+noteToFullNote intNote =
+    let
+        letters =
+            [ C, C_, D, D_, E, F, F_, G, G_, A, A_, B ]
+    in
+        { letter =
+            letters
+                |> List.drop (intNote % 12)
+                |> List.head
+                |> Maybe.withDefault A
+        , octave = (floor ((intNote |> toFloat) / 12)) - 1
+        }
+
+
+fullNoteToNote : FullNote -> Note
+fullNoteToNote note =
+    note.letter |> letterToPosition |> (+) ((note.octave + 1) * 12)

@@ -294,7 +294,7 @@ dotAngles maxVoice arc =
             voices |> List.map (\x -> arc.stop - x)
 
 
-{-| radius in user units
+{-| dots along arcs, radius in user units
 -}
 drawDots : Float -> Int -> Arc -> List (Svg msg)
 drawDots radius maxVoice arc =
@@ -326,11 +326,11 @@ drawDots radius maxVoice arc =
             |> List.map dot
 
 
-drawDotsSide : Int -> Int -> Arc -> List (Svg msg)
-drawDotsSide maxVoice index arc =
+drawDotsSide : Int -> Int -> Int -> List (Svg msg)
+drawDotsSide maxVoice index voice =
     let
         color =
-            if arc.voice > 0 then
+            if voice > 0 then
                 (rgba 50 50 50 1)
             else
                 (rgba 50 150 50 1)
@@ -350,7 +350,7 @@ drawDotsSide maxVoice index arc =
         place j =
             circle
                 [ SA.cy (percent (100 * yInc * (1 - toFloat index)))
-                , SA.cx (percent (100 * (xOffset + toFloat j * xInc * (sign arc.voice))))
+                , SA.cx (percent (100 * (xOffset + toFloat j * xInc * (sign voice))))
                 , stroke color
                 , strokeWidth (percent 0)
                 , fill color
@@ -358,7 +358,7 @@ drawDotsSide maxVoice index arc =
                 ]
                 []
     in
-        List.range 0 (abs arc.voice - 1)
+        List.range 0 (abs voice - 1)
             |> List.map place
 
 
@@ -374,20 +374,24 @@ arcToSvg step index arc =
         -- dotSvg =
         --     drawDots radius 3 arc
         dotSvg =
-            drawDotsSide 3 index arc
+            drawDotsSide 3 index arc.voice
 
         arcSvg =
-            path
-                ([ SA.d (arcCommand (arc.start * 2 * pi) (arc.stop * 2 * pi) radius)
-                 , noFill
-                 , stroke arc.color
-                 , strokeWidth width
-                 , opacity (step.data.color |> Color.toRgb |> .alpha |> (\x -> x ^ 2))
-                 ]
-                )
+            if arc.voice == 0 then
+                [ path
+                    ([ SA.d (arcCommand (arc.start * 2 * pi) (arc.stop * 2 * pi) radius)
+                     , noFill
+                     , stroke arc.color
+                     , strokeWidth width
+                     , opacity (step.data.color |> Color.toRgb |> .alpha |> (\x -> x ^ 2))
+                     ]
+                    )
+                    []
+                ]
+            else
                 []
     in
-        g [] (arcSvg :: dotSvg)
+        g [] (arcSvg ++ dotSvg)
 
 
 stepToSvg : Step StepData msg -> Svg msg
@@ -434,10 +438,9 @@ railToSvg drawStep rail =
 
         noteCircles =
             rail
-                |> transformChildren
                 |> .data
                 |> List.map drawStep
-                |> (\xs -> g [] xs)
+                |> (\xs -> g [ transformToAttribute rail.transform ] xs)
     in
         g [] [ bar, noteCircles ]
 
@@ -463,14 +466,14 @@ ladderToSvg drawStep ladder =
 --HELPERS
 
 
-{-| provide select and update functions to create a ladder transformer
+{-| provide select and update functions to create a ladder transformer.
 -}
 updateSteps : (a -> Int -> Step b msg -> Bool) -> (a -> Int -> Step b msg -> Step b msg) -> Ladder a b msg -> Ladder a b msg
 updateSteps select update =
     select ?? update |> mapStep
 
 
-{-| simple select and update functions don't need rail info
+{-| provide select and update functions. simple functions don't need rail info.
 -}
 updateStepsSimple : (Step b msg -> Bool) -> (Step b msg -> Step b msg) -> Ladder a b msg -> Ladder a b msg
 updateStepsSimple select update =

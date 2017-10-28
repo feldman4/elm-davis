@@ -1,6 +1,7 @@
 module Audio.GL exposing (..)
 
 import Html exposing (..)
+import Html.Attributes exposing (..)
 import WebGL exposing (..)
 import Math.Vector3 exposing (Vec3)
 
@@ -18,6 +19,18 @@ type alias Attributes =
 
 type alias VaryColor =
     { vColor : Vec3 }
+
+
+entitiesToHtml : List Entity -> Html msg
+entitiesToHtml entities =
+    WebGL.toHtml
+        [ width 400
+          -- window.width
+        , height 300
+          -- window.height
+        , style [ ( "display", "block" ) ]
+        ]
+        entities
 
 
 renderCrap : Attributes -> Entity

@@ -82,7 +82,7 @@ leadingWithInversions first second =
             { second | root = second.root |> (\x -> x + (12 * y)) }
 
         seconds =
-            [ -2, -1, 0, 1, 2 ]
+            [ -2, -1, 0, 1, 2, 3, 4 ]
                 |> List.concatMap (\x -> allInversions (shift x))
     in
         seconds
