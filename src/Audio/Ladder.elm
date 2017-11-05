@@ -97,7 +97,7 @@ createArcs n_ =
 intervals.
 -}
 haloTriad : List Int -> Mode -> Int -> Step StepData msg -> Step StepData msg
-haloTriad intervals (Mode mode n) k step =
+haloTriad intervals mode k step =
     let
         buildArc i interval =
             ( interval
@@ -114,7 +114,7 @@ haloTriad intervals (Mode mode n) k step =
         data =
             step.data
     in
-        Mode mode (n + k)
+        { mode | mode = (mode.mode + k) }
             |> modeToChord (cons 2 [ 4 ])
             |> .intervals
             |> Cons.toList
@@ -164,24 +164,20 @@ worst case, could cache if needed
 
 -}
 haloLeading : Int -> Cons Note -> Mode -> Int -> Step StepData msg -> Step StepData msg
-haloLeading root notes_ (Mode scaleFromCenter n) k step =
+haloLeading root notes mode k step =
     let
-        notes =
-            notes_ |> Cons.sort
+        closestLeading =
+            notes
+                |> Cons.toList
+                |> List.sort
+                |> cons2fromList
+                |> Maybe.map notesToChord
+                |> Maybe.map (\c -> findLeading c modePlayed)
+                |> Maybe.andThen List.head
 
         modePlayed =
-            (Mode scaleFromCenter (n + k))
-
-        lowerBy =
-            (Cons.head notes) - (Cons.head notes) % 12 + root
-
-        intervalsPlayed =
-            notes
-                |> Cons.map (\x -> x - lowerBy)
-                |> Cons.sort
-
-        closestLeading =
-            findLeading intervalsPlayed modePlayed step.data.interval |> List.head
+            { scale = mode.scale, mode = mode.mode, root = root }
+                |> relativeRootedMode k
     in
         case closestLeading of
             Just ([ ( a1, b1 ), ( a2, b2 ), ( a3, b3 ) ] as xs) ->
@@ -197,10 +193,10 @@ haloLeading root notes_ (Mode scaleFromCenter n) k step =
 
 
 colorByQuality : Mode -> Int -> Step StepData msg -> Step StepData msg
-colorByQuality (Mode scaleFromCenter n) k step =
+colorByQuality mode k step =
     let
         quality =
-            (Mode scaleFromCenter (n + k)) |> chordInScale
+            { mode | mode = mode.mode + k } |> chordInScale
 
         color =
             case quality of

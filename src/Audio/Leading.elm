@@ -72,6 +72,35 @@ leading first second =
             |> List.sortBy (List.map cost >> List.sum)
 
 
+leadingWithInversions2 :
+    Rooted Chord
+    -> Rooted Chord
+    -> List (List ( Int, Int ))
+leadingWithInversions2 first second =
+    let
+        cost ( x, y ) =
+            abs (x - y)
+
+        firstNotes =
+            first |> chordToNotes
+
+        bottom =
+            firstNotes |> Cons.head
+
+        top =
+            firstNotes |> Cons.reverse |> Cons.head
+
+        window =
+            5
+
+        seconds =
+            allInversions2 (bottom - window) (top + window) second
+    in
+        seconds
+            |> List.concatMap (leading first)
+            |> List.sortBy (List.map cost >> List.sum)
+
+
 leadingWithInversions : Rooted Chord -> Rooted Chord -> List (List ( Int, Int ))
 leadingWithInversions first second =
     let
@@ -90,37 +119,17 @@ leadingWithInversions first second =
             |> List.sortBy (List.map cost >> List.sum)
 
 
-findLeading : Cons Int -> Mode -> Int -> List (List ( Int, Int ))
-findLeading intervalsPlayed mode intervalStep =
+{-| -}
+findLeading : Rooted Chord -> Rooted Mode -> List (List ( Int, Int ))
+findLeading firstChord targetMode =
     let
-        intervalsUsed =
-            case intervalsPlayed |> Cons.sort |> Cons.reverse |> Cons.uncons of
-                ( a, b :: c :: rest ) ->
-                    [ a, b, c ] |> List.reverse
-
-                ( a, [ b ] ) ->
-                    -- [ a, b, b ]
-                    []
-
-                ( a, [] ) ->
-                    -- [ a, a, a ]
-                    []
-
-        first =
-            intervalsUsed
-                |> cons2fromList
-                |> Maybe.map notesToChord
-
-        second : Maybe (Rooted Chord)
-        second =
-            mode
-                |> modeToChord (cons 2 [ 4 ])
-                |> rootChord intervalStep
-                |> chordToNotes
-                |> Cons.toList
-                |> cons2fromList
-                |> Maybe.map notesToChord
+        numNotesInChord =
+            firstChord |> chordToNotes |> Cons.length
     in
-        second
-            |> (Maybe.map2 leadingWithInversions) first
-            |> Maybe.withDefault []
+        if numNotesInChord /= 3 then
+            []
+        else
+            { scale = targetMode.scale, mode = targetMode.mode }
+                |> modeToChord (cons 2 [ 4 ])
+                |> rootChord targetMode.root
+                |> leadingWithInversions2 firstChord

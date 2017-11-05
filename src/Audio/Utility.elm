@@ -16,7 +16,7 @@ permutations : Int -> List a -> List (List a)
 permutations k xs =
     let
         iter ( a, bs ) =
-            choose (k - 1) bs |> List.map ((::) a)
+            permutations (k - 1) bs |> List.map ((::) a)
     in
         case k of
             1 ->
@@ -34,13 +34,26 @@ sign x =
         -1
 
 
+{-| itertools.product
+-}
+product : List (List a) -> List (List a)
+product xss =
+    case xss of
+        xs :: rest ->
+            product rest
+                |> List.concatMap (\ys -> List.map (\x -> x :: ys) xs)
+
+        [] ->
+            [ [] ]
+
+
 {-| order doesn't matter.
 -}
-choose : Int -> List a -> List (List a)
-choose k xs =
+combinations : Int -> List a -> List (List a)
+combinations k xs =
     let
         iter ( _, a, bs ) =
-            choose (k - 1) bs |> List.map ((::) a)
+            combinations (k - 1) bs |> List.map ((::) a)
     in
         case k of
             1 ->
@@ -151,13 +164,13 @@ letterToPosition letter =
             11
 
 
-noteToString : FullNote -> String
-noteToString note =
-    (note.letter |> letterToString) ++ (note.octave |> toString)
+printFullNote : FullNote -> String
+printFullNote note =
+    (note.letter |> printLetter) ++ (note.octave |> toString)
 
 
-letterToString : Letter -> String
-letterToString letter =
+printLetter : Letter -> String
+printLetter letter =
     case letter of
         A ->
             "A"

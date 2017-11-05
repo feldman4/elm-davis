@@ -15,7 +15,6 @@ import Html exposing (div, program, text)
 import Html.Attributes exposing (..)
 import List.Extra
 import Time exposing (Time)
-import String.Extra
 
 
 main : Program Never Model Msg
@@ -117,7 +116,7 @@ view ({ noteHistory, time, inputs } as model) =
 
         notesToText label notes_ =
             notes_
-                |> List.map (noteToFullNote >> noteToString)
+                |> List.map (noteToFullNote >> printFullNote)
                 |> String.join ","
                 |> (++) label
                 |> text

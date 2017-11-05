@@ -7,8 +7,8 @@ import Cons exposing (Cons, cons)
 
 {-| represents a scale and a mode within the scale
 -}
-type Mode
-    = Mode Scale Int
+type alias Mode =
+    { scale : Scale, mode : Int }
 
 
 type Scale
@@ -93,6 +93,14 @@ exampleInvertedMajor =
     exampleRootedMajor |> invertRootedChord
 
 
+exampleRootedMode : Rooted Mode
+exampleRootedMode =
+    { scale = NaturalMajor
+    , mode = 2
+    , root = { letter = E, octave = 4 } |> fullNoteToNote
+    }
+
+
 
 --
 
@@ -111,9 +119,11 @@ cMajor =
     }
 
 
-fMajor2nd : { intervals : Cons number, root : { letter : Letter, octave : number1 } }
-fMajor2nd =
-    { intervals = cons 5 [ 9 ], root = { letter = C, octave = 4 } }
+dMajor7 : Rooted Chord
+dMajor7 =
+    Mode NaturalMajor 0
+        |> modeToChord (Cons.cons 2 [ 4, 6 ])
+        |> rootChord ({ letter = D, octave = 4 } |> fullNoteToNote)
 
 
 majorScale : Mode
@@ -149,25 +159,43 @@ chordToNotes { intervals, root } =
         |> Cons.append (Cons.cons (root) [])
 
 
+modeToBaseIntervals : Mode -> List Int
+modeToBaseIntervals =
+    modeToIntervals >> List.scanl (+) 0
+
+
+{-| mode root is not currently limited to [0, 11]
+-}
+relativeRootedMode : Int -> Rooted Mode -> Rooted Mode
+relativeRootedMode step { scale, mode, root } =
+    { scale = scale, mode = mode }
+        |> modeToIntervals
+        |> List.scanl (+) 0
+        |> rotate step
+        |> List.head
+        |> Maybe.withDefault 0
+        |> (\x -> { scale = scale, mode = mode + step, root = root + x })
+
+
 modeToIntervals : Mode -> List Int
-modeToIntervals scale =
-    case scale of
-        Mode NaturalMajor mode ->
+modeToIntervals { scale, mode } =
+    case ( scale, mode ) of
+        ( NaturalMajor, mode ) ->
             rotate mode [ 2, 2, 1, 2, 2, 2, 1 ]
 
-        Mode MelodicMajor mode ->
-            modeToIntervals (Mode NaturalMajor mode)
+        ( MelodicMajor, mode ) ->
+            modeToIntervals { scale = NaturalMajor, mode = mode }
 
-        Mode NaturalMinor mode ->
-            modeToIntervals (Mode NaturalMajor (mode + 5))
+        ( NaturalMinor, mode ) ->
+            modeToIntervals { scale = NaturalMajor, mode = (mode + 5) }
 
-        Mode HarmonicMinor mode ->
+        ( HarmonicMinor, mode ) ->
             rotate mode [ 2, 1, 2, 2, 1, 3, 1 ]
 
-        Mode MelodicMinor mode ->
+        ( MelodicMinor, mode ) ->
             rotate mode [ 2, 1, 2, 2, 2, 2, 1 ]
 
-        Mode HarmonicMajor mode ->
+        ( HarmonicMajor, mode ) ->
             rotate mode [ 2, 2, 1, 2, 1, 3, 1 ]
 
 
@@ -228,6 +256,39 @@ getChordTones { intervals } =
         , seventh = f 10
         , majorSeventh = f 11
         }
+
+
+allInversionsWindow : Int -> Rooted Chord -> List (Rooted Chord)
+allInversionsWindow window chord =
+    let
+        bottom =
+            chord.root - window
+
+        top =
+            chord.intervals |> Cons.maximum |> (\x -> x + chord.root + window)
+    in
+        allInversions2 bottom top chord
+
+
+allInversions2 : Note -> Note -> Rooted Chord -> List (Rooted Chord)
+allInversions2 bottom top chord =
+    let
+        availableNotes note =
+            let
+                first =
+                    ((note - bottom) % 12) + bottom
+            in
+                List.range 0 ((top - first) // 12)
+                    |> List.map (\x -> x * 12 + first)
+    in
+        chord
+            |> chordToNotes
+            |> Cons.toList
+            |> List.map availableNotes
+            |> product
+            |> List.map List.sort
+            |> List.filterMap cons2fromList
+            |> List.map notesToChord
 
 
 allInversions : Rooted Chord -> List (Rooted Chord)
@@ -309,7 +370,7 @@ printChord : Rooted Chord -> Maybe String
 printChord chord =
     let
         root =
-            chord.root |> noteToFullNote |> .letter |> letterToString
+            chord.root |> noteToFullNote |> .letter |> printLetter
 
         quality =
             chord |> getChordQuality
