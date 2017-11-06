@@ -6,6 +6,7 @@ import Audio.Types exposing (..)
 import Audio.Utility exposing (..)
 import Cons
 import Dict
+import List.Extra
 
 
 main : Html.Html msg
@@ -13,13 +14,18 @@ main =
     Html.text ""
 
 
-example : String
-example =
+exampleGrips : List (Six (Maybe Int))
+exampleGrips =
     dMajor7
         |> (\c -> { c | root = c.root + 4 })
         |> allInversionsWindow 5
-        |> List.concatMap (chordToGrips standard)
+        |> List.concatMap (chordToGrips standardE)
         |> List.filter (\xs -> xs |> sixToList |> List.filterMap identity |> List.length |> (==) 4)
+
+
+example : String
+example =
+    exampleGrips
         |> List.map printGrip
         |> List.sort
         |> String.join "\n"
@@ -161,15 +167,53 @@ stretch xs =
         |> Maybe.withDefault 0
 
 
+difficulty : Six (Maybe Int) -> Int
+difficulty grip =
+    let
+        frets =
+            grip
+                |> filterMaybeSix
+                |> List.map (\( _, b ) -> b)
+
+        strings =
+            grip
+                |> filterMaybeSix
+                |> List.map (\( a, _ ) -> a)
+
+        stringSkipping =
+            List.Extra.foldl1 (-) strings
+                |> Maybe.withDefault 0
+                |> abs
+
+        highestFret =
+            frets |> List.maximum |> Maybe.withDefault 0
+
+        highestFretPenalty =
+            if highestFret > 18 then
+                4
+            else if highestFret > 15 then
+                3
+            else if highestFret > 12 then
+                2
+            else if highestFret > 9 then
+                1
+            else
+                0
+
+        openFrets =
+            if frets |> List.any ((==) 0) then
+                2
+            else
+                0
+    in
+        (stretch frets) + stringSkipping + highestFretPenalty + openFrets
+
+
 {-| true if xs contains all ys
 -}
 contains : List a -> List a -> Bool
 contains ys xs =
     ys |> List.all (\y -> List.member y xs)
-
-
-
--- |> List.map f
 
 
 indexedFilterMap : (a -> Maybe b) -> List a -> List ( number, b )
@@ -232,11 +276,11 @@ mapSix f { one, two, three, four, five, six } =
     }
 
 
-standard : Six Note
-standard =
+standardE : Six Note
+standardE =
     let
         one =
-            { letter = E, octave = 3 } |> fullNoteToNote
+            { letter = E, octave = 2 } |> fullNoteToNote
     in
         { one = one
         , two = one + 5

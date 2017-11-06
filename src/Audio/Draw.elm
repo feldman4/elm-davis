@@ -33,9 +33,9 @@ type alias Colored a =
 -- HTML
 
 
-svgScene : List (Svg a) -> Html a
-svgScene =
-    svg [ SA.width (percent 100), SA.height (percent 100), viewBox 0 0 1 1 ]
+svgScene : Svg a -> Html a
+svgScene x =
+    svg [ SA.width (percent 100), SA.height (percent 100), viewBox 0 0 1 1 ] [ x ]
 
 
 displayChannels : List ( String, Bool ) -> (String -> msg) -> Html msg

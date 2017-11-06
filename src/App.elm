@@ -9,6 +9,8 @@ import Audio.Music exposing (..)
 import Audio.Roll exposing (..)
 import Audio.Types exposing (..)
 import Audio.Utility exposing (..)
+import Audio.Fretted exposing (standardE, chordToGrips, difficulty)
+import Audio.Fretboard exposing (drawGrips)
 import Cons exposing (cons)
 import Dict exposing (Dict)
 import Html exposing (div, program, text)
@@ -133,7 +135,7 @@ view ({ noteHistory, time, inputs } as model) =
                 |> List.map (relativeToPresent time)
                 |> buildRoll 3
                 |> rollToSvg rollNoteToSvg
-                |> (\x -> svgScene [ x ])
+                |> svgScene
                 |> (\x -> div divAttributes [ x ])
 
         chordText =
@@ -176,16 +178,29 @@ view ({ noteHistory, time, inputs } as model) =
                 -- |> updateSteps (\_ _ _ -> True) (haloTriad intervals)
                 |>
                     ladderToSvg stepToSvg
-                |> (\x -> svgScene [ x ])
+                |> svgScene
                 |> (\x -> div divAttributes [ x ])
+
+        alternateVoicings =
+            chord
+                |> List.take 4
+                |> cons2fromList
+                |> Maybe.map notesToChord
+                |> Maybe.map (allInversionsWindow 3)
+                |> Maybe.map (List.concatMap (chordToGrips standardE))
+                |> Maybe.withDefault []
+                |> List.sortBy difficulty
+                |> List.take 8
+                |> drawGrips
     in
         div [ style [ ( "text-align", "center" ) ] ]
             [ ladderHtml
-            , pianoRoll
+              -- , pianoRoll
             , displayChannels (inputs |> Dict.toList) SelectInput
             , chordText
             , notesToText "notes: " notes
             , notesToText "chord notes: " chord
+            , alternateVoicings
               -- , glTriangles
             ]
 

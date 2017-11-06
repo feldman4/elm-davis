@@ -81,13 +81,15 @@ lastChordIter soFar noteEvents =
             ( later :: _, earlier :: rest ) ->
                 case earlier.end of
                     Nothing ->
-                        lastChordIter (sortByStart (earlier :: soFar)) rest
+                        -- lastChordIter (sortByStart (earlier :: soFar)) rest
+                        lastChordIter ((earlier :: soFar)) rest
 
                     Just end ->
                         if end < later.start then
                             soFar
                         else
-                            lastChordIter (sortByStart (earlier :: soFar)) rest
+                            -- lastChordIter (sortByStart (earlier :: soFar)) rest
+                            lastChordIter ((earlier :: soFar)) rest
 
 
 
