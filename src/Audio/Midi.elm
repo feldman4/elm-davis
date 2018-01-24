@@ -55,41 +55,74 @@ midiToNote ( datatype, intNote, velocity ) =
 
 {-| notes are sorted from most recent start to earliest start
 -}
-lastChord : List NoteEvent -> List NoteEvent
-lastChord =
-    lastChordIter []
-
-
-lastChordIter : List NoteEvent -> List NoteEvent -> List NoteEvent
-lastChordIter soFar noteEvents =
+lastChordPiano : List NoteEvent -> List NoteEvent
+lastChordPiano =
     let
-        sortByStart =
-            List.sortBy (\n -> -1 * n.start)
+        lastChordIter soFar noteEvents =
+            let
+                sortByStart =
+                    List.sortBy (\n -> -1 * n.start)
+            in
+                case ( soFar, noteEvents ) of
+                    ( _, [] ) ->
+                        soFar
+
+                    ( [], noteEvent :: rest ) ->
+                        case noteEvent.end of
+                            Nothing ->
+                                lastChordIter [ noteEvent ] rest
+
+                            Just _ ->
+                                []
+
+                    ( later :: _, earlier :: rest ) ->
+                        case earlier.end of
+                            Nothing ->
+                                -- lastChordIter (sortByStart (earlier :: soFar)) rest
+                                lastChordIter ((earlier :: soFar)) rest
+
+                            Just end ->
+                                if end < later.start then
+                                    soFar
+                                else
+                                    -- lastChordIter (sortByStart (earlier :: soFar)) rest
+                                    lastChordIter ((earlier :: soFar)) rest
     in
-        case ( soFar, noteEvents ) of
-            ( _, [] ) ->
-                soFar
+        lastChordIter []
 
-            ( [], noteEvent :: rest ) ->
-                case noteEvent.end of
-                    Nothing ->
-                        lastChordIter [ noteEvent ] rest
 
-                    Just _ ->
-                        []
+lastChordGuitar : List NoteEvent -> List NoteEvent
+lastChordGuitar =
+    let
+        lastChordIter soFar noteEvents =
+            let
+                sortByStart =
+                    List.sortBy (\n -> -1 * n.start)
+            in
+                case ( soFar, noteEvents ) of
+                    ( _, [] ) ->
+                        soFar
 
-            ( later :: _, earlier :: rest ) ->
-                case earlier.end of
-                    Nothing ->
-                        -- lastChordIter (sortByStart (earlier :: soFar)) rest
-                        lastChordIter ((earlier :: soFar)) rest
+                    ( [], noteEvent :: rest ) ->
+                        case noteEvent.end of
+                            Nothing ->
+                                lastChordIter [ noteEvent ] rest
 
-                    Just end ->
-                        if end < later.start then
-                            soFar
-                        else
-                            -- lastChordIter (sortByStart (earlier :: soFar)) rest
-                            lastChordIter ((earlier :: soFar)) rest
+                            Just _ ->
+                                []
+
+                    ( later :: _, earlier :: rest ) ->
+                        case earlier.end of
+                            Nothing ->
+                                lastChordIter (sortByStart (earlier :: soFar)) rest
+
+                            Just end ->
+                                if end < later.start then
+                                    soFar
+                                else
+                                    lastChordIter (sortByStart (earlier :: soFar)) rest
+    in
+        lastChordIter []
 
 
 

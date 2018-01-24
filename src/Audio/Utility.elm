@@ -7,7 +7,7 @@ import List.Extra
 
 strEq : a -> a -> Bool
 strEq a a_ =
-    (toString a) == (toString a_)
+    toString a == toString a_
 
 
 {-| order matters

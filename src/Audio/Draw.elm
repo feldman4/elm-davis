@@ -180,7 +180,7 @@ arcCommand start stop radius =
 -- TEXT
 
 
-printPossibleChords : List Note -> Html msg
+printPossibleChords : List Note -> List String
 printPossibleChords noteList =
     noteList
         |> List.sort
@@ -190,8 +190,6 @@ printPossibleChords noteList =
         |> Maybe.map ((List.map printChord) >> Maybe.Extra.values)
         |> Maybe.withDefault []
         |> List.Extra.unique
-        |> String.join ", "
-        |> (\x -> div [] [ text x ])
 
 
 

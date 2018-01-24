@@ -136,9 +136,6 @@ defaultFret data =
 fretboardToSvg : (Fret msg -> Svg msg) -> Fretboard msg -> Svg msg
 fretboardToSvg drawFret fretboard =
     let
-        stringWidth =
-            0.01
-
         numStrings =
             5
 
