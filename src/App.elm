@@ -1,4 +1,4 @@
-port module App exposing (Model, Msg(..), init, update, view)
+port module App exposing (..)
 
 import AnimationFrame
 import Audio.Component exposing (..)

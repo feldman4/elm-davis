@@ -63,6 +63,26 @@ draw2 ( a, b ) =
         ( False, li [ style [ ( "color", "red" ) ] ] [ text b ] )
 
 
+rightArrow : String
+rightArrow =
+    "▸"
+
+
+
+-- "&#8364;"
+-- ">"
+
+
+downArrow : String
+downArrow =
+    "▾"
+
+
+
+-- "<"
+-- "&#8364;"
+
+
 draw3 : Int -> List number -> ( Bool, String ) -> ( Bool, Html Msg )
 draw3 numChildren crumbs ( a, b ) =
     let
@@ -77,19 +97,26 @@ draw3 numChildren crumbs ( a, b ) =
 
         prefix =
             if numChildren == 0 then
-                "  "
+                " "
             else if a then
-                "▸ "
+                rightArrow
             else
-                "▾ "
+                downArrow
     in
         ( a
         , li
-            [ style [ ( "color", color_ ), ( "font-family", "monospace" ) ]
+            [ style [ ( "color", color_ ), ( "font-family", "Arial, sans serif" ) ]
             , onClick (FoldAt crumbs)
             ]
-            [ text (prefix ++ b) ]
+            [ text (prefix ++ " " ++ b) ]
         )
+
+
+{-| TODO: recursive draw
+-}
+draw4 : String
+draw4 =
+    ""
 
 
 exampleTree : Tree String

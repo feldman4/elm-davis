@@ -110,6 +110,13 @@ guitarVoicings model guitarFlag pianoFlag configs =
         |> drawGrips
 
 
+ladderHtml :
+    NoteModel a
+    -> String
+    -> String
+    -> String
+    -> List String
+    -> Html.Html msg
 ladderHtml model guitarFlag pianoFlag triadFlag configs =
     let
         root =
