@@ -26,6 +26,13 @@ type alias NoteEvent =
     { note : Note, start : Float, end : Maybe Float }
 
 
+type alias NoteModel a =
+    { a
+        | noteHistory : List NoteEvent
+        , notes : List NoteEvent
+    }
+
+
 type Letter
     = A
     | A_

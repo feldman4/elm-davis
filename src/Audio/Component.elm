@@ -1,6 +1,7 @@
 module Audio.Component
     exposing
         ( viewComponents
+        , reshapeComponents
         , selected
         , copySelection
         , toggleSelectionNumKey
@@ -43,6 +44,20 @@ type alias Component a =
 viewComponents : Config a -> List (Component msg) -> List (Html msg)
 viewComponents config components =
     components |> List.map (\f -> f (flattenConfig config))
+
+
+reshapeComponents :
+    List { c | component : a, name : comparable, on : b, options : v }
+    -> ( Dict comparable v, List ( b, a ) )
+reshapeComponents xs =
+    let
+        f { name, options } =
+            ( name, options )
+
+        g { on, component } =
+            ( on, component )
+    in
+        ( xs |> List.map f |> Dict.fromList, xs |> List.map g )
 
 
 {-| convenience
