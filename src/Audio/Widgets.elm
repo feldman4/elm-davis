@@ -13,11 +13,21 @@ import Html exposing (div, program, text)
 import Html.Attributes exposing (style)
 import List.Extra
 import Cons
+import NativeModule
 
 
-divAttributes : List (Html.Attribute msg)
-divAttributes =
-    [ style [ ( "height", "45%" ), ( "margin", "0 auto" ), ( "display", "block" ) ] ]
+-- PERFORMANCE
+
+
+memoChordToGripsStandardE :
+    Audio.Music.Rooted Audio.Music.Chord
+    -> List Audio.Fretted.Grip
+memoChordToGripsStandardE =
+    NativeModule.memoize (chordToGrips standardE)
+
+
+
+-- WIDGETS
 
 
 pianoRoll :
@@ -26,6 +36,7 @@ pianoRoll :
     -> Html.Html msg
 pianoRoll model configs =
     (model.notes ++ model.noteHistory)
+        |> List.take 100
         |> List.map (relativeToPresent model.time)
         |> Audio.Roll.buildRoll 3
         |> Audio.Roll.rollToSvg Audio.Roll.rollNoteToSvg
@@ -49,53 +60,6 @@ notesToText model configs =
         |> (\x -> div [] [ x ])
 
 
-
--- HELPERS
-
-
-chordPiano : NoteModel a -> List Int
-chordPiano model =
-    (model.notes ++ model.noteHistory)
-        |> Audio.Midi.lastChordPiano
-        |> List.map .note
-        |> List.Extra.unique
-
-
-chordGuitar : NoteModel a -> List Int
-chordGuitar model =
-    (model.notes ++ model.noteHistory)
-        |> Audio.Midi.lastChordPiano
-        |> List.map .note
-        |> List.Extra.unique
-
-
-chord : NoteModel a -> String -> String -> List String -> List Int
-chord model guitarFlag pianoFlag configs =
-    if List.member guitarFlag configs then
-        chordGuitar model
-    else if List.member pianoFlag configs then
-        chordPiano model
-    else
-        model.notes |> List.map .note |> List.Extra.unique
-
-
-chordText : NoteModel a -> String -> String -> List String -> Html.Html msg
-chordText model guitarFlag pianoFlag configs =
-    let
-        chordNames =
-            chord model guitarFlag pianoFlag configs
-                |> Audio.Draw.printPossibleChords
-    in
-        case chordNames of
-            [] ->
-                div [] [ text "no chord" ]
-
-            _ ->
-                chordNames
-                    |> String.join ", "
-                    |> (\x -> div [] [ text x ])
-
-
 guitarVoicings : NoteModel a -> String -> String -> List String -> Html.Html msg
 guitarVoicings model guitarFlag pianoFlag configs =
     (chord model guitarFlag pianoFlag configs)
@@ -103,7 +67,7 @@ guitarVoicings model guitarFlag pianoFlag configs =
         |> cons2fromList
         |> Maybe.map Audio.Music.notesToChord
         |> Maybe.map (Audio.Music.allInversionsWindow 5)
-        |> Maybe.map (List.concatMap (chordToGrips standardE))
+        |> Maybe.map (List.concatMap memoChordToGripsStandardE)
         |> Maybe.withDefault []
         |> List.sortBy Audio.Fretted.difficulty
         |> List.take 8
@@ -154,3 +118,55 @@ ladderHtml model guitarFlag pianoFlag triadFlag configs =
             |> Audio.Ladder.ladderToSvg Audio.Ladder.stepToSvg
             |> Audio.Draw.svgScene
             |> (\x -> div divAttributes [ x ])
+
+
+
+-- HELPERS
+
+
+divAttributes : List (Html.Attribute msg)
+divAttributes =
+    [ style [ ( "width", "50%" ), ( "margin", "0 auto" ), ( "display", "block" ) ] ]
+
+
+chordPiano : NoteModel a -> List Int
+chordPiano model =
+    (model.notes ++ model.noteHistory)
+        |> Audio.Midi.lastChordPiano
+        |> List.map .note
+        |> List.Extra.unique
+
+
+chordGuitar : NoteModel a -> List Int
+chordGuitar model =
+    (model.notes ++ model.noteHistory)
+        |> Audio.Midi.lastChordPiano
+        |> List.map .note
+        |> List.Extra.unique
+
+
+chord : NoteModel a -> String -> String -> List String -> List Int
+chord model guitarFlag pianoFlag configs =
+    if List.member guitarFlag configs then
+        chordGuitar model
+    else if List.member pianoFlag configs then
+        chordPiano model
+    else
+        model.notes |> List.map .note |> List.Extra.unique
+
+
+chordText : NoteModel a -> String -> String -> List String -> Html.Html msg
+chordText model guitarFlag pianoFlag configs =
+    let
+        chordNames =
+            chord model guitarFlag pianoFlag configs
+                |> Audio.Draw.printPossibleChords
+    in
+        case chordNames of
+            [] ->
+                div [] [ text "no chord" ]
+
+            _ ->
+                chordNames
+                    |> String.join ", "
+                    |> (\x -> div [] [ text x ])

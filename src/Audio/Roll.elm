@@ -1,4 +1,4 @@
-module Audio.Roll exposing (buildRoll, rollToSvg, rollNoteToSvg)
+module Audio.Roll exposing (buildRoll, rollToSvg, rollNoteToSvg, Roll)
 
 import Audio.Draw exposing (..)
 import Audio.Types exposing (..)
