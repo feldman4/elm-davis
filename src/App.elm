@@ -26,12 +26,12 @@ initComponents ({ noteHistory, time, inputs } as model) =
         [ { name = "ladderHtml"
           , options = [ ( KE.CharT, [ "triad", "dots" ] ), ( KE.CharS, [ "guitarSustain", "pianoSustain", "noSustain" ] ) ]
           , component = Audio.Widgets.ladderHtml model "ladderHtml.guitarSustain" "ladderHtml.pianoSustain" "ladderHtml.triad"
-          , on = False
+          , on = True
           }
         , { name = "pianoRoll"
           , options = []
           , component = Audio.Widgets.pianoRoll model
-          , on = True
+          , on = False
           }
         , { name = "notesText"
           , options = []
@@ -41,7 +41,7 @@ initComponents ({ noteHistory, time, inputs } as model) =
         , { name = "chordText"
           , options = []
           , component = Audio.Widgets.chordText model "ladderHtml.guitarSustain" "ladderHtml.pianoSustain"
-          , on = False
+          , on = True
           }
         , { name = "guitarVoicings"
           , options = []

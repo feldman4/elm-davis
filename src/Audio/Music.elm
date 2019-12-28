@@ -144,7 +144,7 @@ bigFour : List Mode
 bigFour =
     -- [ MelodicMajor, HarmonicMinor, MelodicMinor, HarmonicMajor ]
     --     |> List.map (\x -> Mode x 0)
-    [ Mode MelodicMajor 0, Mode MelodicMajor 5 ]
+    [ Mode MelodicMajor 0, Mode HarmonicMajor 0, Mode HarmonicMinor 0 ]
 
 
 analyzeChord : Chord_ a -> { quality : Maybe ChordQuality }
